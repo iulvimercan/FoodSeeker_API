@@ -30,6 +30,7 @@ builder.Services.AddControllers();
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddSingleton<PasswordService>();
+builder.Services.AddSingleton<EmailService>();
 
 // Register AppDbContext
 builder.Services.AddDbContext<FoodSeekerContext>(options =>

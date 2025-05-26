@@ -26,7 +26,7 @@ public class TokenService(IConfiguration configuration)
             }),
 
             // b) Expiration date/time for the token validity
-            Expires = DateTime.UtcNow.AddMonths(1),
+            Expires = DateTime.UtcNow.AddMonths(6),
 
             // c) Issuer of the token (who issues it)
             Issuer = issuer,
