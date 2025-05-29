@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FoodSeekerAPI.Migrations
 {
     [DbContext(typeof(FoodSeekerContext))]
-    [Migration("20250515200222_InitialCreate")]
+    [Migration("20250527113240_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -28,7 +28,6 @@ namespace FoodSeekerAPI.Migrations
             modelBuilder.Entity("FoodSeekerAPI.Models.DonatorProfile", b =>
                 {
                     b.Property<long>("DonatorId")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
 
                     b.Property<string>("Address")
@@ -258,6 +257,9 @@ namespace FoodSeekerAPI.Migrations
                     b.Property<bool>("IsDonator")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("bit");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -322,7 +324,7 @@ namespace FoodSeekerAPI.Migrations
                         .IsRequired();
 
                     b.HasOne("FoodSeekerAPI.Models.User", "Seeker")
-                        .WithMany("Favorites")
+                        .WithMany("FavoriteDonators")
                         .HasForeignKey("SeekerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -407,10 +409,9 @@ namespace FoodSeekerAPI.Migrations
                 {
                     b.Navigation("DeviceTokens");
 
-                    b.Navigation("DonatorProfile")
-                        .IsRequired();
+                    b.Navigation("DonatorProfile");
 
-                    b.Navigation("Favorites");
+                    b.Navigation("FavoriteDonators");
 
                     b.Navigation("Feedbacks");
 

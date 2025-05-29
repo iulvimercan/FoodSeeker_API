@@ -23,7 +23,7 @@ namespace FoodSeekerAPI.Controllers
         public async Task<ActionResult<IEnumerable<User>>> GetUsers()
         {
             // log the endpoint and the request time
-            Console.WriteLine($"(LOG) GET Request to {HttpContext.Request.Path} at {DateTime.Now}");
+            Console.WriteLine($"(LOG) GET Request to {HttpContext.Request.Path} at {DateTime.UtcNow}");
             try
             {
                 var users = await _context.Users.ToListAsync();

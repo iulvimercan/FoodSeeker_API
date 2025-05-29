@@ -19,8 +19,9 @@ namespace FoodSeekerAPI.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     FullName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PasswordHash = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
                     ProfilePhotoUrl = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    IsVerified = table.Column<bool>(type: "bit", nullable: false),
                     IsDonator = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
@@ -165,9 +166,9 @@ namespace FoodSeekerAPI.Migrations
                     DonatorId = table.Column<long>(type: "bigint", nullable: false),
                     FoodName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    IsEatIn = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    IsTakeAway = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
-                    IsBringPack = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    IsEatIn = table.Column<bool>(type: "bit", nullable: false),
+                    IsTakeAway = table.Column<bool>(type: "bit", nullable: false),
+                    IsBringPack = table.Column<bool>(type: "bit", nullable: false),
                     PhotoUrl = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false)
@@ -255,45 +256,40 @@ namespace FoodSeekerAPI.Migrations
                 table: "UserDeviceTokens",
                 column: "UserId");
             
-            
-            // Sample data
             var passHash = BCrypt.Net.BCrypt.HashPassword("test");
-            
             migrationBuilder.InsertData(
                 table: "Users",
-                columns: new[] { "UserId", "FullName", "Email", "PasswordHash", "IsDonator", "CreatedAt" },
+                columns: new[] { "UserId", "FullName", "Email", "PasswordHash", "IsDonator", "CreatedAt", "IsVerified" },
                 values: new object[,]
                 {
-                    { 1L, "John Doe", "john@example.com", passHash, false, DateTime.UtcNow }, // Food Seeker
-                    { 2L, "Emma Smith", "emma@example.com", passHash, true, DateTime.UtcNow }  // Donator
+                    { 1L, "John Doe", "john@example.com", passHash, false, DateTime.UtcNow , true }, // Food Seeker
+                    { 2L, "Emma Smith", "emma@example.com", passHash, true, DateTime.UtcNow, true }  // Donator
                 }
             );
-            
     
             migrationBuilder.InsertData(
                 table: "DonatorProfiles",
                 columns: new[] { "DonatorId", "RestaurantName", "ShortAddress", "Address", "Latitude", "Longitude", "DonationStarts", "DonationEnds", "AverageScore", "FavoritesCount" },
-                values: new object[] { 1L, "Pasta Palace", "123 Pasta St", "123 Pasta St, Food City", 40.7128, -74.0060, new TimeOnly(10, 0), new TimeOnly(20, 0), 4.5f, 100 }
+                values: new object[] { 2L, "Pasta Palace", "123 Pasta St", "123 Pasta St, Food City", 40.7128, -74.0060, new TimeOnly(10, 0), new TimeOnly(20, 0), 4.5f, 100 }
             );
 
             migrationBuilder.InsertData(
                 table: "FoodItems",
                 columns: new[] { "FoodId", "DonatorId", "FoodName", "Description", "PhotoUrl", "IsEatIn", "IsTakeAway", "IsBringPack", "IsActive", "CreatedAt" },
-                values: new object[] { 1L, 1L, "Pasta", "Delicious hot pasta", null, true, false, true, true, DateTime.UtcNow }
+                values: new object[] { 1L, 2L, "Pasta", "Delicious hot pasta", null, true, false, true, true, DateTime.UtcNow }
             );
 
             migrationBuilder.InsertData(
                 table: "Feedbacks",
                 columns: new[] { "FeedbackId", "FromUserId", "DonatorId", "Rating", "Comment", "CreatedAt" },
-                values: new object[] { 1L, 1L, 1L, 5, "Great food!", DateTime.UtcNow }
+                values: new object[] { 1L, 1L, 2L, 5, "Great food!", DateTime.UtcNow }
             );
             
             migrationBuilder.InsertData(
                 table: "FavoriteDonators",
                 columns: new[] { "FavouriteId", "SeekerId", "DonatorId", "FavoritedAt" },
-                values: new object[] { 1L, 1L, 1L, DateTime.UtcNow }
+                values: new object[] { 1L, 1L, 2L, DateTime.UtcNow }
             );
-
         }
 
         /// <inheritdoc />
