@@ -3,6 +3,8 @@ using FoodSeekerAPI.Data;
 using FoodSeekerAPI.Services;
 using Microsoft.AspNetCore.Mvc;
 using FoodSeekerAPI.DTO.Auth;
+using FoodSeekerAPI.DTO.Common;
+using FoodSeekerAPI.DTO.User;
 using FoodSeekerAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,12 +19,15 @@ public class AuthController(
     EmailService emailService)
     : ControllerBase
 {
+    // Dependencies injected via constructor
     private readonly FoodSeekerContext _db = db;
     private readonly TokenService _tokenService = tokenService;
     private readonly PasswordService _passwordService = passwordService;
     private readonly EmailService _emailService = emailService;
 
-
+    /// <summary>
+    /// Handles user login requests.
+    /// </summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto dto)
     {
@@ -31,35 +36,66 @@ public class AuthController(
             Console.WriteLine($"(LOG) Login attempt with email: {dto.Email} at {DateTime.UtcNow}");
 
             // 1. Find user by email
-            var user = _db.Users.SingleOrDefault(u => u.Email == dto.Email);
+            var user = await _db.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
             if (user is null)
                 return Unauthorized("Invalid email or password");
 
-            // 2. Compare hashed passwords
-            if (_passwordService.VerifyPassword(dto.Password, user.PasswordHash) == false)
+            // 2. Validate the password hash
+            if (!_passwordService.VerifyPassword(dto.Password, user.PasswordHash))
                 return Unauthorized("Invalid email or password");
 
-            // 3. Check if user is verified. If not, send a verification email
-            if (user.IsVerified == false)
+            // 3. Check if user email is verified; if not, send verification email
+            if (!user.IsVerified)
             {
                 var emailVerificationToken = _tokenService.GenerateEmailVerificationToken(user.UserId, user.Email);
-                var verificationLink =
-                    $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={emailVerificationToken}";
+                var verificationLink = $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={emailVerificationToken}";
 
-                // Send verification email
+                // Email content for verification
                 const string subject = "Email Verification Required";
-                string body =
-                    $"<h1>Email Verification Required</h1><p>Please use the following link to verify your email: <a href=\' {verificationLink} \'>Verify Email</a>.<b>Please ignore this email if you are not trying to login.</b></p>";
+                string body = $"<h1>Email Verification Required</h1><p>Please verify your email by clicking <a href='{verificationLink}'>here</a>. If this wasn't you, please ignore this email.</p>";
                 await _emailService.SendEmailAsync(user.Email, subject, body);
 
                 return BadRequest("Please verify your email before logging in.");
             }
 
-            // 4. Generate token
+            // 4. Fetch user profile including DonatorProfile if exists
+            var userProfileDto = new UserProfileDto
+            {
+                UserId = user.UserId,
+                FullName = user.FullName,
+                Email = user.Email,
+                IsDonator = user.IsDonator,
+                ProfilePhotoUrl = user.ProfilePhotoUrl
+            };
+            if (user.IsDonator)
+            {
+                var donatorProfile = (await _db.DonatorProfiles.SingleOrDefaultAsync(d => d.DonatorId == user.UserId))!;
+                var donatorProfileDto = new DonatorProfileDto
+                {
+                    DonatorId = donatorProfile.DonatorId,
+                    RestaurantName = donatorProfile.RestaurantName,
+                    ProfilePhotoUrl = user.ProfilePhotoUrl,
+                    Address = donatorProfile.Address,
+                    AddressStreet = donatorProfile.AddressStreet,
+                    AddressMunicipality = donatorProfile.AddressMunicipality,
+                    AddressCity = donatorProfile.AddressCity,
+                    AddressCountry = donatorProfile.AddressCountry,
+                    Latitude = donatorProfile.Latitude,
+                    Longitude = donatorProfile.Longitude,
+                    DonationStarts = donatorProfile.DonationStarts.ToString(@"HH:mm"),
+                    DonationEnds = donatorProfile.DonationEnds.ToString(@"HH:mm"),
+                    AverageScore = donatorProfile.AverageScore,
+                    FavoritesCount = donatorProfile.FavoritesCount
+                };
+                
+                userProfileDto.DonatorProfile = donatorProfileDto;
+            }
+            
+            // 5. Generate JWT token for authenticated user
             var token = _tokenService.GenerateApiAccessToken(user.UserId, user.IsDonator);
 
-            // 5. Return token
-            return Ok(new { user.UserId, user.IsDonator, token });
+            // 6. Return user info and token
+            return Ok(new { token, user = userProfileDto });
         }
         catch (Exception ex)
         {
@@ -68,6 +104,9 @@ public class AuthController(
         }
     }
 
+    /// <summary>
+    /// Registers a new Food Seeker user.
+    /// </summary>
     [HttpPost("sign-up/food-seeker")]
     public async Task<IActionResult> SignUpFoodSeeker([FromBody] SignUpFoodSeekerRequestDto dto)
     {
@@ -75,37 +114,29 @@ public class AuthController(
         {
             Console.WriteLine($"(LOG) Sign-up attempt with email: {dto.Email} at {DateTime.UtcNow}");
 
-            // 1. Check if user already exists
-            User? user = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (user != null)
+            // 1. Check if email already exists
+            var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            if (existingUser != null)
             {
-                if (user.IsVerified)
-                {
+                if (existingUser.IsVerified)
                     return Conflict("User with this email already exists.");
-                }
 
-                // delete the unverified user from users table and also from DonatorProfiles table if the type is donator
-                if (user.IsDonator)
+                // Remove unverified user and related donator profile if applicable
+                if (existingUser.IsDonator)
                 {
-                    DonatorProfile? donatorProfile = await _db.DonatorProfiles
-                        .FirstOrDefaultAsync(dp => dp.DonatorId == user.UserId);
-
-                    if (donatorProfile != null)
-                    {
-                        _db.DonatorProfiles.Remove(donatorProfile);
-                    }
+                    var donatorProfile = await _db.DonatorProfiles.FirstOrDefaultAsync(dp => dp.DonatorId == existingUser.UserId);
+                    if (donatorProfile != null) _db.DonatorProfiles.Remove(donatorProfile);
                 }
 
-                _db.Users.Remove(user);
+                _db.Users.Remove(existingUser);
                 await _db.SaveChangesAsync();
-
                 Console.WriteLine($"(LOG) Deleted unverified user with email: {dto.Email} at {DateTime.UtcNow}");
             }
 
-            // 2. Hash the password
+            // 2. Hash the user's password
             var passwordHash = _passwordService.HashPassword(dto.Password);
 
-            // 3. Create a new user
+            // 3. Create and save new user
             var newUser = new User
             {
                 FullName = dto.FullName,
@@ -114,22 +145,20 @@ public class AuthController(
                 IsDonator = false,
                 CreatedAt = DateTime.UtcNow,
             };
-
             _db.Users.Add(newUser);
             await _db.SaveChangesAsync();
 
-            // 4. Generate token
+            // 4. Generate email verification token and link
             var token = _tokenService.GenerateEmailVerificationToken(newUser.UserId, newUser.Email);
             var verificationLink = $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={token}";
 
-            // 5. Send welcome email for greeting and the email verification
+            // 5. Send welcome and verification email
             const string subject = "Welcome to FoodSeeker!";
-            string body =
-                $"<h1>Welcome to FoodSeeker!</h1><p>Thank you for signing up.<br>Please use the following link to verify your email and complete the registration: <a href=\' {verificationLink} \'>Verify Email</a>. <b>If you are not the one who is trying to register, ignore this email.</b></p>";
+            string body = $"<h1>Welcome to FoodSeeker!</h1><p>Thank you for signing up. Please verify your email <a href='{verificationLink}'>here</a>. Ignore if you didn't register.</p>";
             await _emailService.SendEmailAsync(dto.Email, subject, body);
 
-            // 6. Return the success response
-            return Ok("Sign-up successful! Please check your email inbox to verify your account.");
+            // 6. Respond success
+            return Ok("Sign-up successful! Please check your email to verify your account.");
         }
         catch (Exception ex)
         {
@@ -138,6 +167,9 @@ public class AuthController(
         }
     }
 
+    /// <summary>
+    /// Registers a new Donator user along with their profile.
+    /// </summary>
     [HttpPost("sign-up/donator")]
     public async Task<IActionResult> SignUpDonator([FromBody] SignUpDonatorRequestDto dto)
     {
@@ -145,37 +177,29 @@ public class AuthController(
         {
             Console.WriteLine($"(LOG) Donator sign-up attempt with email: {dto.Email} at {DateTime.UtcNow}");
 
-            // 1. Check if user already exists
-            User? user = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (user != null)
+            // 1. Check if email already exists
+            var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            if (existingUser != null)
             {
-                if (user.IsVerified)
-                {
+                if (existingUser.IsVerified)
                     return Conflict("User with this email already exists.");
-                }
 
-                // delete the unverified user from users table and also from DonatorProfiles table if the type is donator
-                if (user.IsDonator)
+                // Remove unverified user and related donator profile
+                if (existingUser.IsDonator)
                 {
-                    DonatorProfile? donatorProfile = await _db.DonatorProfiles
-                        .FirstOrDefaultAsync(dp => dp.DonatorId == user.UserId);
-
-                    if (donatorProfile != null)
-                    {
-                        _db.DonatorProfiles.Remove(donatorProfile);
-                    }
+                    var donatorProfile = await _db.DonatorProfiles.FirstOrDefaultAsync(dp => dp.DonatorId == existingUser.UserId);
+                    if (donatorProfile != null) _db.DonatorProfiles.Remove(donatorProfile);
                 }
 
-                _db.Users.Remove(user);
+                _db.Users.Remove(existingUser);
                 await _db.SaveChangesAsync();
-
                 Console.WriteLine($"(LOG) Deleted unverified user with email: {dto.Email} at {DateTime.UtcNow}");
             }
 
             // 2. Hash the password
             var passwordHash = _passwordService.HashPassword(dto.Password);
 
-            // 3. Create a new user
+            // 3. Create and save new donator user
             var newUser = new User
             {
                 FullName = dto.FullName,
@@ -184,12 +208,11 @@ public class AuthController(
                 IsDonator = true,
                 CreatedAt = DateTime.UtcNow,
             };
-
             _db.Users.Add(newUser);
             await _db.SaveChangesAsync();
 
-            // 4. Create a new donator profile
-            var newDonator = new DonatorProfile
+            // 4. Create donator profile linked to user
+            var newDonatorProfile = new DonatorProfile
             {
                 DonatorId = newUser.UserId,
                 RestaurantName = dto.RestaurantName,
@@ -203,20 +226,19 @@ public class AuthController(
                 DonationStarts = dto.DonationStarts,
                 DonationEnds = dto.DonationEnds,
             };
-
-            _db.DonatorProfiles.Add(newDonator);
+            _db.DonatorProfiles.Add(newDonatorProfile);
             await _db.SaveChangesAsync();
 
-            // 5. Generate token
+            // 5. Generate email verification token and send email
             var token = _tokenService.GenerateEmailVerificationToken(newUser.UserId, newUser.Email);
             var verificationLink = $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={token}";
-            // 6. Send welcome email for greeting and the email verification
-            const string subject = "Welcome to FoodSeeker!";
 
-            string body =
-                $"<h1>Welcome to FoodSeeker!</h1><p>Thank you for signing up as a donator.<br>Please use the following link to verify your email and complete the registration: <a href=\' {verificationLink} \'>Verify Email</a>. <b>If you are not the one who is trying to register, ignore this email.</b></p>";
+            const string subject = "Welcome to FoodSeeker!";
+            string body = $"<h1>Welcome to FoodSeeker!</h1><p>Thank you for signing up as a donator. Please verify your email <a href='{verificationLink}'>here</a>. Ignore if you didn't register.</p>";
             await _emailService.SendEmailAsync(dto.Email, subject, body);
-            return Ok("Sign-up successful! Please check your email inbox to verify your account.");
+
+            // 6. Respond success
+            return Ok("Sign-up successful! Please check your email to verify your account.");
         }
         catch (Exception ex)
         {
@@ -225,11 +247,15 @@ public class AuthController(
         }
     }
 
+    /// <summary>
+    /// Verifies user's email address using a token.
+    /// </summary>
     [HttpGet("verify-email")]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token)
     {
         try
         {
+            // Validate the token and extract claims principal
             var principal = _tokenService.ValidateEmailVerificationToken(token);
             if (principal == null)
             {
@@ -237,42 +263,42 @@ public class AuthController(
                 return BadRequest("Invalid or expired token.");
             }
 
-            // Extract user ID from token claims
+            // Extract user ID claim from token
             var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null)
             {
-                Console.WriteLine($"(ERROR) Token does not contain user ID claim at {DateTime.UtcNow}");
+                Console.WriteLine($"(ERROR) Token missing user ID claim at {DateTime.UtcNow}");
                 return BadRequest("Invalid token structure.");
             }
 
             if (!long.TryParse(userIdClaim.Value, out long userId))
             {
-                Console.WriteLine($"(ERROR) Invalid user ID in token at {DateTime.UtcNow}");
+                Console.WriteLine($"(ERROR) Invalid user ID format in token at {DateTime.UtcNow}");
                 return BadRequest("Invalid token structure.");
             }
 
-            // 1. Find user by ID
+            // Find user by ID
             var user = await _db.Users.FindAsync(userId);
             if (user == null)
             {
-                Console.WriteLine($"(ERROR) User not found for ID: {userId} at {DateTime.UtcNow}");
+                Console.WriteLine($"(ERROR) User not found for ID {userId} at {DateTime.UtcNow}");
                 return NotFound("User not found.");
             }
 
-            // 2. Check if user is already verified
+            // If already verified, inform client
             if (user.IsVerified)
             {
-                Console.WriteLine($"(LOG) User with ID: {userId} is already verified at {DateTime.UtcNow}");
+                Console.WriteLine($"(LOG) User {userId} already verified at {DateTime.UtcNow}");
                 return Ok("Email is already verified.");
             }
 
-            // 3. Mark user as verified
+            // Mark user as verified
             user.IsVerified = true;
             _db.Users.Update(user);
             await _db.SaveChangesAsync();
-            Console.WriteLine($"(LOG) User with ID: {userId} has been verified successfully at {DateTime.UtcNow}");
 
-            return Ok("Email is verified successfully.");
+            Console.WriteLine($"(LOG) User {userId} verified at {DateTime.UtcNow}");
+            return Ok("Email verified successfully.");
         }
         catch (Exception ex)
         {
