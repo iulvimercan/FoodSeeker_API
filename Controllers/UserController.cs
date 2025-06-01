@@ -19,55 +19,64 @@ public class UserController(FoodSeekerContext db) : ControllerBase
     [HttpGet("profile")]
     public async Task<ActionResult<UserProfileDto>> GetProfile()
     {
-        // Get user ID from JWT claims
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
-            return Unauthorized();
-
-        // Query User including DonatorProfile if exists
-        var user = await _db.Users
-            .Include(u => u.DonatorProfile) // Include DonatorProfile navigation property
-            .SingleOrDefaultAsync(u => u.UserId == userId);
-
-        if (user == null)
-            return NotFound();
-
-
-        // Return only User data if not a donator
-        var profile = new UserProfileDto
+        try
         {
-            UserId = user.UserId,
-            FullName = user.FullName,
-            Email = user.Email,
-            IsDonator = user.IsDonator,
-            ProfilePhotoUrl = user.ProfilePhotoUrl
-        };
+            // Get user ID from JWT claims
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized();
 
-        if (user.IsDonator)
-        {
-            // Return User + DonatorProfile data
-            var donatorDto = new DonatorProfileDto
+            // Query User including DonatorProfile if exists
+            var user = await _db.Users
+                .Include(u => u.DonatorProfile) // Include DonatorProfile navigation property
+                .SingleOrDefaultAsync(u => u.UserId == userId);
+
+            if (user == null)
+                return NotFound();
+
+
+            // Return only User data if not a donator
+            var profile = new UserProfileDto
             {
-                DonatorId = user.DonatorProfile!.DonatorId,
-                RestaurantName = user.DonatorProfile.RestaurantName,
-                ProfilePhotoUrl = user.ProfilePhotoUrl,
-                Address = user.DonatorProfile.Address,
-                AddressStreet = user.DonatorProfile.AddressStreet,
-                AddressMunicipality = user.DonatorProfile.AddressMunicipality,
-                AddressCity = user.DonatorProfile.AddressCity,
-                AddressCountry = user.DonatorProfile.AddressCountry,
-                Latitude = user.DonatorProfile.Latitude,
-                Longitude = user.DonatorProfile.Longitude,
-                DonationStarts = user.DonatorProfile.DonationStarts.ToString(@"HH:mm"),
-                DonationEnds = user.DonatorProfile.DonationEnds.ToString(@"HH:mm"),
-                AverageScore = user.DonatorProfile.AverageScore,
-                FavoritesCount = user.DonatorProfile.FavoritesCount
+                UserId = user.UserId,
+                FullName = user.FullName,
+                Email = user.Email,
+                IsDonator = user.IsDonator,
+                ProfilePhotoUrl = user.ProfilePhotoUrl
             };
 
-            profile.DonatorProfile = donatorDto;
-        }
+            if (user.IsDonator)
+            {
+                // Return User + DonatorProfile data
+                var donatorDto = new DonatorProfileDto
+                {
+                    DonatorId = user.DonatorProfile!.DonatorId,
+                    RestaurantName = user.DonatorProfile.RestaurantName,
+                    ProfilePhotoUrl = user.ProfilePhotoUrl,
+                    Address = user.DonatorProfile.Address,
+                    AddressStreet = user.DonatorProfile.AddressStreet,
+                    AddressMunicipality = user.DonatorProfile.AddressMunicipality,
+                    AddressCity = user.DonatorProfile.AddressCity,
+                    AddressCountry = user.DonatorProfile.AddressCountry,
+                    Latitude = user.DonatorProfile.Latitude,
+                    Longitude = user.DonatorProfile.Longitude,
+                    DonationStarts = user.DonatorProfile.DonationStarts.ToString(@"HH:mm"),
+                    DonationEnds = user.DonatorProfile.DonationEnds.ToString(@"HH:mm"),
+                    AverageScore = user.DonatorProfile.AverageScore,
+                    FavoritesCount = user.DonatorProfile.FavoritesCount
+                };
 
-        return Ok(profile);
+                profile.DonatorProfile = donatorDto;
+            }
+
+            return Ok(profile);
+        }
+        catch (Exception e)
+        {
+            // Log the exception (you can use a logging framework here)
+            Console.WriteLine($"(ERROR) Exception in GetProfile: {e.Message}");
+            return StatusCode(500, "Internal server error");
+        }
     }
 
 
