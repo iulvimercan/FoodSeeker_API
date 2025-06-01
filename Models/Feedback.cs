@@ -26,7 +26,7 @@ namespace FoodSeekerAPI.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation properties
-        public required User FromUser { get; set; }
-        public required DonatorProfile DonatorProfile { get; set; }
+        public User? FromUser { get; set; }
+        public DonatorProfile? DonatorProfile { get; set; }
     }
 }

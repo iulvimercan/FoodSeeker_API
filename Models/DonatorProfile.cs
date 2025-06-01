@@ -1,22 +1,32 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.AspNetCore.Components;
 
 namespace FoodSeekerAPI.Models
 {
     public class DonatorProfile
     {
         [Key, ForeignKey("User")]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public long DonatorId { get; set; }
 
         [Required, MaxLength(100)]
         public required string RestaurantName { get; set; }
 
-        [MaxLength(200)]
-        public required string ShortAddress { get; set; }
-
         [MaxLength(500)]
         public required string Address { get; set; }
+        
+        [MaxLength(64)]
+        public required string AddressStreet { get; set; } // cadde
+        
+        [MaxLength(64)]
+        public required string AddressMunicipality { get; set; } // ilçe
+        
+        [MaxLength(64)]
+        public required string AddressCity { get; set; } // il
+        
+        [MaxLength(64)]
+        public required string AddressCountry { get; set; } // ülke
 
         [Required]
         public double Latitude { get; set; }
@@ -35,6 +45,7 @@ namespace FoodSeekerAPI.Models
         public int FavoritesCount { get; set; }
 
         // Navigation Property
-        public required User User { get; set; }
+        public User? User { get; set; }
+        public ICollection<FoodItem>? FoodItems { get; set; }
     }
 }

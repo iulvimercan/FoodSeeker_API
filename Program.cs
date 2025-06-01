@@ -1,6 +1,4 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using FoodSeekerAPI.Data;
 using FoodSeekerAPI.Services;
@@ -9,19 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-
-            ValidIssuer = "FoodSeekerAPI",
-            ValidAudience = "FoodSeekerAPI",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-        };
-    });
+        options.TokenValidationParameters = TokenService.GetDefaultTokenValidationParameters(builder.Configuration)
+    );
 
 // Add services to the container.
 builder.Services.AddEndpointsApiExplorer();
@@ -30,6 +17,7 @@ builder.Services.AddControllers();
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddSingleton<PasswordService>();
+builder.Services.AddSingleton<EmailService>();
 
 // Register AppDbContext
 builder.Services.AddDbContext<FoodSeekerContext>(options =>
@@ -37,8 +25,8 @@ builder.Services.AddDbContext<FoodSeekerContext>(options =>
 
 var app = builder.Build();
 
-app.UseAuthentication();  // 🔐 This validates the JWT token from requests
-app.UseAuthorization();   // 👮 This enforces [Authorize] attributes
+app.UseAuthentication(); // 🔐 This validates the JWT token from requests
+app.UseAuthorization(); // 👮 This enforces [Authorize] attributes
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

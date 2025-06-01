@@ -36,6 +36,6 @@ namespace FoodSeekerAPI.Models
         public bool IsActive { get; set; } = true;
 
         // Navigation property
-        public required DonatorProfile DonatorProfile { get; set; }
+        public DonatorProfile? DonatorProfile { get; set; }
     }
 }

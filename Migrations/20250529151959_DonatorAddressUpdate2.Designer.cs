@@ -4,6 +4,7 @@ using FoodSeekerAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FoodSeekerAPI.Migrations
 {
     [DbContext(typeof(FoodSeekerContext))]
-    partial class FoodSeekerContextModelSnapshot : ModelSnapshot
+    [Migration("20250529151959_DonatorAddressUpdate2")]
+    partial class DonatorAddressUpdate2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -25,13 +28,32 @@ namespace FoodSeekerAPI.Migrations
             modelBuilder.Entity("FoodSeekerAPI.Models.DonatorProfile", b =>
                 {
                     b.Property<long>("DonatorId")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
 
                     b.Property<string>("Address")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("AddressCity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AddressCountry")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AddressMunicipality")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AddressStreet")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<float>("AverageScore")
                         .HasColumnType("real");
@@ -55,11 +77,6 @@ namespace FoodSeekerAPI.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("ShortAddress")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
 
                     b.HasKey("DonatorId");
 
@@ -255,6 +272,9 @@ namespace FoodSeekerAPI.Migrations
                     b.Property<bool>("IsDonator")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("bit");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -319,7 +339,7 @@ namespace FoodSeekerAPI.Migrations
                         .IsRequired();
 
                     b.HasOne("FoodSeekerAPI.Models.User", "Seeker")
-                        .WithMany("Favorites")
+                        .WithMany("FavoriteDonators")
                         .HasForeignKey("SeekerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -404,10 +424,9 @@ namespace FoodSeekerAPI.Migrations
                 {
                     b.Navigation("DeviceTokens");
 
-                    b.Navigation("DonatorProfile")
-                        .IsRequired();
+                    b.Navigation("DonatorProfile");
 
-                    b.Navigation("Favorites");
+                    b.Navigation("FavoriteDonators");
 
                     b.Navigation("Feedbacks");
 

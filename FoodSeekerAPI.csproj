@@ -20,6 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="DTO\User\" />
       <Folder Include="Migrations\" />
     </ItemGroup>
 

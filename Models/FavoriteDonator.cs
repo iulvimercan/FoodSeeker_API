@@ -20,7 +20,7 @@ namespace FoodSeekerAPI.Models
         public DateTime FavoritedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation properties
-        public required User Seeker { get; set; }
-        public required DonatorProfile DonatorProfile { get; set; }
+        public User? Seeker { get; set; }
+        public DonatorProfile? DonatorProfile { get; set; }
     }
 }
