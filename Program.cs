@@ -1,7 +1,9 @@
+using FirebaseAdmin;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using FoodSeekerAPI.Data;
 using FoodSeekerAPI.Services;
+using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +11,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
         options.TokenValidationParameters = TokenService.GetDefaultTokenValidationParameters(builder.Configuration)
     );
+
+FirebaseApp.Create(new AppOptions()
+{
+    // Initialize Firebase Admin SDK with the service account key file
+    Credential = GoogleCredential.FromFile("firebase-service-account.json"),
+});
 
 // Add services to the container.
 builder.Services.AddEndpointsApiExplorer();
@@ -18,6 +26,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddSingleton<EmailService>();
+builder.Services.AddSingleton<NotificationService>();
 
 // Register AppDbContext
 builder.Services.AddDbContext<FoodSeekerContext>(options =>
