@@ -142,6 +142,7 @@ public class AuthController(
                 FullName = dto.FullName,
                 Email = dto.Email,
                 PasswordHash = passwordHash,
+                ProfilePhotoUrl = dto.ProfilePhotoUrl,
                 IsDonator = false,
                 CreatedAt = DateTime.UtcNow,
             };
@@ -205,6 +206,7 @@ public class AuthController(
                 FullName = dto.FullName,
                 Email = dto.Email,
                 PasswordHash = passwordHash,
+                ProfilePhotoUrl = dto.ProfilePhotoUrl,
                 IsDonator = true,
                 CreatedAt = DateTime.UtcNow,
             };
