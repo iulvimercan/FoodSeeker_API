@@ -1,7 +1,9 @@
 ﻿using System.Security.Claims;
 using FoodSeekerAPI.Data;
+using FoodSeekerAPI.DTO.Common;
 using FoodSeekerAPI.DTO.FoodItem;
 using FoodSeekerAPI.Models;
+using FoodSeekerAPI.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,9 +12,83 @@ namespace FoodSeekerAPI.Controllers;
 
 [Route("api/food")]
 [ApiController]
-public class FoodItemsController(FoodSeekerContext db) : ControllerBase
+public class FoodItemController(FoodSeekerContext db) : ControllerBase
 {
     private readonly FoodSeekerContext _db = db;
+
+    [HttpGet("nearby")]
+    public async Task<ActionResult<IEnumerable<FoodItemDto>>> GetFoodItemsByLocation(
+        [FromQuery] double latitude,
+        [FromQuery] double longitude,
+        [FromQuery] double distanceKm = 30,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 3)
+    {
+        try
+        {
+            double degLat = distanceKm / 111.32;
+            double degLon = distanceKm / (111.32 * Math.Cos(latitude * Math.PI / 180));
+
+            var foodItemsWithProfiles = await _db.FoodItems
+                .Where(fi => fi.IsActive &&
+                             fi.DonatorProfile != null &&
+                             fi.DonatorProfile.Latitude >= latitude - degLat &&
+                             fi.DonatorProfile.Latitude <= latitude + degLat &&
+                             fi.DonatorProfile.Longitude >= longitude - degLon &&
+                             fi.DonatorProfile.Longitude <= longitude + degLon)
+                .Include(fi => fi.DonatorProfile)
+                .Include(fi => fi.DonatorProfile!.User)
+                .ToListAsync();
+
+            var sorted = foodItemsWithProfiles
+                .Select(fi =>
+                    new FoodItemDto
+                    {
+                        FoodId = fi.FoodId,
+                        FoodName = fi.FoodName,
+                        Description = fi.Description,
+                        IsEatIn = fi.IsEatIn,
+                        IsTakeAway = fi.IsTakeAway,
+                        IsBringPack = fi.IsBringPack,
+                        PhotoUrl = fi.PhotoUrl,
+                        IsActive = fi.IsActive,
+                        CreatedAt = fi.CreatedAt,
+                        DonatorProfile = new DonatorProfileDto
+                        {
+                            DonatorId = fi.DonatorProfile!.DonatorId,
+                            RestaurantName = fi.DonatorProfile.RestaurantName,
+                            ProfilePhotoUrl = fi.DonatorProfile.User?.ProfilePhotoUrl,
+                            Address = fi.DonatorProfile.Address,
+                            AddressStreet = fi.DonatorProfile.AddressStreet,
+                            AddressMunicipality = fi.DonatorProfile.AddressMunicipality,
+                            AddressCity = fi.DonatorProfile.AddressCity,
+                            AddressCountry = fi.DonatorProfile.AddressCountry,
+                            Latitude = fi.DonatorProfile.Latitude,
+                            Longitude = fi.DonatorProfile.Longitude,
+                            Distance = GeoUtils.CalculateDistance(
+                                latitude,
+                                longitude,
+                                fi.DonatorProfile.Latitude,
+                                fi.DonatorProfile.Longitude),
+                            DonationStarts = fi.DonatorProfile.DonationStarts.ToString("HH:mm"),
+                            DonationEnds = fi.DonatorProfile.DonationEnds.ToString("HH:mm"),
+                            AverageScore = (double)fi.DonatorProfile.AverageScore,
+                            FavoritesCount = fi.DonatorProfile.FavoritesCount
+                        }
+                    })
+                .OrderBy(fi => fi.DonatorProfile!.Distance)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return Ok(sorted);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("An error occurred while retrieving food items: " + e.Message);
+            return StatusCode(500, "An error occurred while processing your request.");
+        }
+    }
 
     [HttpPost]
     [Authorize(Roles = "Donator")]
@@ -50,7 +126,6 @@ public class FoodItemsController(FoodSeekerContext db) : ControllerBase
         }
     }
 
-
     [HttpGet("by-donator/{donatorId}")]
     public async Task<ActionResult<IEnumerable<FoodItem>>> GetFoodItemsByDonatorId([FromRoute] long donatorId)
     {
@@ -77,8 +152,6 @@ public class FoodItemsController(FoodSeekerContext db) : ControllerBase
         }
     }
 
-
-    // put method to update an existing food item
     [HttpPut("{foodItemId}")]
     [Authorize(Roles = "Donator")]
     public async Task<ActionResult<FoodItem>> UpdateFoodItem([FromRoute] long foodItemId,

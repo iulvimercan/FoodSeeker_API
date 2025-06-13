@@ -6,6 +6,9 @@ using FoodSeekerAPI.Services;
 using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
+// Turn off Entity Framework Core logging to reduce noise in the logs
+// Only log warnings and errors
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

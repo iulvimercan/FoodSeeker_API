@@ -1,6 +1,6 @@
 ﻿using System.Security.Claims;
 using FoodSeekerAPI.Data;
-using FoodSeekerAPI.DTO.UserDeviceToken;
+using FoodSeekerAPI.DTO.Common;
 using FoodSeekerAPI.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,7 +16,7 @@ public class UserDeviceTokenController(FoodSeekerContext db) : ControllerBase
 
     [HttpPost]
     [Authorize]
-    public async Task<IActionResult> SaveUserDeviceToken([FromBody] SaveUserDeviceTokenRequestDto dto)
+    public async Task<IActionResult> SaveUserDeviceToken([FromBody] UserDeviceTokenDto dto)
     {
         try
         {
@@ -59,6 +59,40 @@ public class UserDeviceTokenController(FoodSeekerContext db) : ControllerBase
         {
             Console.WriteLine($"Error saving device token: {e.Message}");
             return StatusCode(500, "An error occurred while saving the device token.");
+        }
+    }
+
+
+    [HttpDelete]
+    [Authorize]
+    public async Task<IActionResult> DeleteUserDeviceToken([FromBody] UserDeviceTokenDto dto)
+    {
+        try
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+            {
+                return Unauthorized("User not authenticated.");
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.DeviceToken))
+                return BadRequest("Invalid device token.");
+            
+            var existingToken = await _db.UserDeviceTokens
+                .FirstOrDefaultAsync(t => t.UserId == userId && t.DeviceToken == dto.DeviceToken);
+
+            if (existingToken == null)
+                return NotFound("Device token not found for the user.");
+
+            _db.UserDeviceTokens.Remove(existingToken);
+            await _db.SaveChangesAsync();
+
+            return Ok("Device token deleted successfully.");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error deleting device token: {e.Message}");
+            return StatusCode(500, "An error occurred while deleting the device token.");
         }
     }
 }

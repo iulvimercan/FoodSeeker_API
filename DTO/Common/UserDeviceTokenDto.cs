@@ -1,6 +1,6 @@
-﻿namespace FoodSeekerAPI.DTO.UserDeviceToken;
+﻿namespace FoodSeekerAPI.DTO.Common;
 
-public class SaveUserDeviceTokenRequestDto
+public class UserDeviceTokenDto
 {
     public required string DeviceToken { get; set; }
     public string? Platform { get; set; }  // e.g., 'iOS', 'Android'

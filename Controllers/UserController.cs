@@ -69,7 +69,19 @@ public class UserController(FoodSeekerContext db) : ControllerBase
                 profile.DonatorProfile = donatorDto;
             }
 
-            return Ok(profile);
+            var notifications = await _db.NotificationLogs
+                .Where(n => n.UserId == userId)
+                .OrderByDescending(n => n.SentAt)
+                .Select(n => new NotificationLogDto {
+                    NotificationId = n.NotificationId,
+                    Title = n.Title ?? string.Empty,
+                    Message = n.Message ?? string.Empty,
+                    SentAt = n.SentAt,
+                    IsRead = n.IsRead
+                })
+                .ToListAsync();
+
+            return Ok(new { profile, notifications });
         }
         catch (Exception e)
         {
