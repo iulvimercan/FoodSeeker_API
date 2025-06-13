@@ -26,6 +26,6 @@ namespace FoodSeekerAPI.Models
         public bool IsRead { get; set; } = false;
 
         // Navigation property
-        public required User User { get; set; }
+        public User? User { get; set; }
     }
 }

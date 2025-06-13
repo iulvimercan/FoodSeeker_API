@@ -87,15 +87,30 @@ public class AuthController(
                     AverageScore = donatorProfile.AverageScore,
                     FavoritesCount = donatorProfile.FavoritesCount
                 };
-                
+
                 userProfileDto.DonatorProfile = donatorProfileDto;
             }
-            
+
             // 5. Generate JWT token for authenticated user
             var token = _tokenService.GenerateApiAccessToken(user.UserId, user.IsDonator);
 
-            // 6. Return user info and token
-            return Ok(new { token, user = userProfileDto });
+            // 6. Fetch user notifications
+            var notifications = await _db.NotificationLogs
+                .Where(n => n.UserId == user.UserId)
+                .OrderByDescending(n => n.SentAt)
+                .Select(n => new NotificationLogDto
+                {
+                    NotificationId = n.NotificationId,
+                    Title = n.Title ?? string.Empty,
+                    Message = n.Message ?? string.Empty,
+                    SentAt = n.SentAt,
+                    IsRead = n.IsRead
+                })
+                .ToListAsync();
+
+
+            // 7. Return user info and token
+            return Ok(new { token, user = userProfileDto, notifications });
         }
         catch (Exception ex)
         {
@@ -142,6 +157,7 @@ public class AuthController(
                 FullName = dto.FullName,
                 Email = dto.Email,
                 PasswordHash = passwordHash,
+                ProfilePhotoUrl = dto.ProfilePhotoUrl,
                 IsDonator = false,
                 CreatedAt = DateTime.UtcNow,
             };
@@ -205,6 +221,7 @@ public class AuthController(
                 FullName = dto.FullName,
                 Email = dto.Email,
                 PasswordHash = passwordHash,
+                ProfilePhotoUrl = dto.ProfilePhotoUrl,
                 IsDonator = true,
                 CreatedAt = DateTime.UtcNow,
             };

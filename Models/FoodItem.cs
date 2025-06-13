@@ -37,5 +37,6 @@ namespace FoodSeekerAPI.Models
 
         // Navigation property
         public DonatorProfile? DonatorProfile { get; set; }
+        public ICollection<PickupIntent>? PickupIntents { get; set; }
     }
 }

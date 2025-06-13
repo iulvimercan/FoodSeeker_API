@@ -20,7 +20,7 @@ namespace FoodSeekerAPI.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation properties
-        public required FoodItem FoodItem { get; set; }
-        public required User User { get; set; }
+        public FoodItem? FoodItem { get; set; }
+        public User? User { get; set; }
     }
 }

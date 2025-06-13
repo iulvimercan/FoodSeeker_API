@@ -12,6 +12,7 @@ public class DonatorProfileDto
     public required string AddressCountry { get; set; } = string.Empty;
     public required double Latitude { get; set; }
     public required double Longitude { get; set; }
+    public double? Distance { get; set; } 
 
     // Use string to match Dart structure ("HH:mm")
     public required  string DonationStarts { get; set; } = string.Empty;
@@ -19,4 +20,5 @@ public class DonatorProfileDto
  
     public required  double AverageScore { get; set; }
     public required  int FavoritesCount { get; set; }
+    public int? FoodItemsCount { get; set; }
 }
