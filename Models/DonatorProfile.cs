@@ -46,6 +46,6 @@ namespace FoodSeekerAPI.Models
 
         // Navigation Property
         public User? User { get; set; }
-        public ICollection<FoodItem>? FoodItems { get; set; }
+        public ICollection<FoodItem> FoodItems { get; set; } = new List<FoodItem>();
     }
 }

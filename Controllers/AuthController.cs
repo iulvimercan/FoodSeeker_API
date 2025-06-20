@@ -57,60 +57,12 @@ public class AuthController(
 
                 return BadRequest("Please verify your email before logging in.");
             }
-
-            // 4. Fetch user profile including DonatorProfile if exists
-            var userProfileDto = new UserProfileDto
-            {
-                UserId = user.UserId,
-                FullName = user.FullName,
-                Email = user.Email,
-                IsDonator = user.IsDonator,
-                ProfilePhotoUrl = user.ProfilePhotoUrl
-            };
-            if (user.IsDonator)
-            {
-                var donatorProfile = (await _db.DonatorProfiles.SingleOrDefaultAsync(d => d.DonatorId == user.UserId))!;
-                var donatorProfileDto = new DonatorProfileDto
-                {
-                    DonatorId = donatorProfile.DonatorId,
-                    RestaurantName = donatorProfile.RestaurantName,
-                    ProfilePhotoUrl = user.ProfilePhotoUrl,
-                    Address = donatorProfile.Address,
-                    AddressStreet = donatorProfile.AddressStreet,
-                    AddressMunicipality = donatorProfile.AddressMunicipality,
-                    AddressCity = donatorProfile.AddressCity,
-                    AddressCountry = donatorProfile.AddressCountry,
-                    Latitude = donatorProfile.Latitude,
-                    Longitude = donatorProfile.Longitude,
-                    DonationStarts = donatorProfile.DonationStarts.ToString(@"HH:mm"),
-                    DonationEnds = donatorProfile.DonationEnds.ToString(@"HH:mm"),
-                    AverageScore = donatorProfile.AverageScore,
-                    FavoritesCount = donatorProfile.FavoritesCount
-                };
-
-                userProfileDto.DonatorProfile = donatorProfileDto;
-            }
-
-            // 5. Generate JWT token for authenticated user
+            
+            // 4. Generate JWT token for authenticated user
             var token = _tokenService.GenerateApiAccessToken(user.UserId, user.IsDonator);
-
-            // 6. Fetch user notifications
-            var notifications = await _db.NotificationLogs
-                .Where(n => n.UserId == user.UserId)
-                .OrderByDescending(n => n.SentAt)
-                .Select(n => new NotificationLogDto
-                {
-                    NotificationId = n.NotificationId,
-                    Title = n.Title ?? string.Empty,
-                    Message = n.Message ?? string.Empty,
-                    SentAt = n.SentAt,
-                    IsRead = n.IsRead
-                })
-                .ToListAsync();
-
-
-            // 7. Return user info and token
-            return Ok(new { token, user = userProfileDto, notifications });
+            
+            // 5. Return user info and token
+            return Ok(new { token });
         }
         catch (Exception ex)
         {

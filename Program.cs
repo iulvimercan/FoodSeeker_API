@@ -26,6 +26,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<PickupIntentService>();
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddSingleton<EmailService>();
