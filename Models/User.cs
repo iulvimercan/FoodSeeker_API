@@ -27,10 +27,11 @@ namespace FoodSeekerAPI.Models
 
         // Navigation Properties
         public DonatorProfile? DonatorProfile { get; set; }
-        public ICollection<PickupIntent>? PickupIntents { get; set; }
-        public ICollection<Feedback>? Feedbacks { get; set; }
-        public ICollection<FavoriteDonator>? FavoriteDonators { get; set; }
-        public ICollection<UserDeviceToken>? DeviceTokens { get; set; }
-        public ICollection<NotificationLog>? NotificationLogs { get; set; }
+        public ICollection<PickupIntent> PickupIntents { get; set; } = new List<PickupIntent>();
+        public ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
+        public ICollection<FavoriteDonator> FavoriteDonators { get; set; } = new List<FavoriteDonator>();
+
+        public ICollection<UserDeviceToken> DeviceTokens { get; set; } = new List<UserDeviceToken>();
+        public ICollection<NotificationLog> NotificationLogs { get; set; } = new List<NotificationLog>();
     }
 }

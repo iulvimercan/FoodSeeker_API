@@ -84,6 +84,63 @@ public class NotificationController(FoodSeekerContext db, NotificationService no
         return Ok(updatedNotifications);
     }
 
+    [HttpDelete("{notificationId:long}")]
+    [Authorize]
+    public async Task<IActionResult> DeleteNotification(long notificationId)
+    {
+        try
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized("User not authenticated.");
+
+            var notification = await _db.NotificationLogs
+                .FirstOrDefaultAsync(n => n.NotificationId == notificationId && n.UserId == userId);
+
+            if (notification == null)
+                return NotFound("Notification not found.");
+
+            _db.NotificationLogs.Remove(notification);
+            await _db.SaveChangesAsync();
+
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error deleting notification: {e.Message}");
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+    
+    [HttpDelete("delete-all")]
+    [Authorize]
+    public async Task<IActionResult> DeleteAllNotifications()
+    {
+        try
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized("User not authenticated.");
+
+            var notifications = await _db.NotificationLogs
+                .Where(n => n.UserId == userId)
+                .ToListAsync();
+
+            if (!notifications.Any())
+                return NotFound("No notifications found for the user.");
+
+            _db.NotificationLogs.RemoveRange(notifications);
+            await _db.SaveChangesAsync();
+
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error deleting notifications: {e.Message}");
+            return StatusCode(500, $"Internal server error: {e.Message}");
+        }
+    }
+
 
     // todo - for testing purposes only, remove in production
     [HttpPost("send")]

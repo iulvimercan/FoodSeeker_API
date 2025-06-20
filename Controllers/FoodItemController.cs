@@ -3,6 +3,7 @@ using FoodSeekerAPI.Data;
 using FoodSeekerAPI.DTO.Common;
 using FoodSeekerAPI.DTO.FoodItem;
 using FoodSeekerAPI.Models;
+using FoodSeekerAPI.Services;
 using FoodSeekerAPI.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,9 +13,10 @@ namespace FoodSeekerAPI.Controllers;
 
 [Route("api/food")]
 [ApiController]
-public class FoodItemController(FoodSeekerContext db) : ControllerBase
+public class FoodItemController(FoodSeekerContext db, PickupIntentService pickupIntentService) : ControllerBase
 {
     private readonly FoodSeekerContext _db = db;
+    private readonly PickupIntentService _pickupIntentService = pickupIntentService;
 
     [HttpGet("nearby")]
     public async Task<ActionResult<IEnumerable<FoodItemDto>>> GetFoodItemsByLocation(
@@ -223,6 +225,9 @@ public class FoodItemController(FoodSeekerContext db) : ControllerBase
             _db.FoodItems.Update(foodItem);
             await _db.SaveChangesAsync();
 
+            // notify the food seekers with pickup intent for this food item
+            await _pickupIntentService.RemovePickupIntentsByFoodIdAndNotifyAsync(foodItemId);
+
             return Ok(foodItem);
         }
         catch (Exception e)
@@ -253,6 +258,9 @@ public class FoodItemController(FoodSeekerContext db) : ControllerBase
 
             if (foodItem == null)
                 return NotFound("Food item not found.");
+            
+            // Remove pickup intents associated with this food item
+            await _pickupIntentService.RemovePickupIntentsByFoodIdAndNotifyAsync(foodItemId);
 
             // Remove food item from the database
             _db.FoodItems.Remove(foodItem);

@@ -29,11 +29,14 @@ public class UserController(FoodSeekerContext db) : ControllerBase
             // Query User including DonatorProfile if exists
             var user = await _db.Users
                 .Include(u => u.DonatorProfile) // Include DonatorProfile navigation property
+                .Include(u => u.NotificationLogs) // Include NotificationLogs for the user
+                .Include(u => u.FavoriteDonators) // Include FavoriteDonators for the user
+                .ThenInclude(fd => fd.DonatorProfile)
+                .ThenInclude(d => d!.User) // Include DonatorProfile in FavoriteDonators
                 .SingleOrDefaultAsync(u => u.UserId == userId);
 
             if (user == null)
                 return NotFound();
-
 
             // Return only User data if not a donator
             var profile = new UserProfileDto
@@ -47,41 +50,67 @@ public class UserController(FoodSeekerContext db) : ControllerBase
 
             if (user.IsDonator)
             {
-                // Return User + DonatorProfile data
+                // if the user is a donator, include DonatorProfile data as well
+                var donatorProfile = user.DonatorProfile!;
                 var donatorDto = new DonatorProfileDto
                 {
-                    DonatorId = user.DonatorProfile!.DonatorId,
-                    RestaurantName = user.DonatorProfile.RestaurantName,
+                    DonatorId = donatorProfile.DonatorId,
+                    RestaurantName = donatorProfile.RestaurantName,
                     ProfilePhotoUrl = user.ProfilePhotoUrl,
-                    Address = user.DonatorProfile.Address,
-                    AddressStreet = user.DonatorProfile.AddressStreet,
-                    AddressMunicipality = user.DonatorProfile.AddressMunicipality,
-                    AddressCity = user.DonatorProfile.AddressCity,
-                    AddressCountry = user.DonatorProfile.AddressCountry,
-                    Latitude = user.DonatorProfile.Latitude,
-                    Longitude = user.DonatorProfile.Longitude,
-                    DonationStarts = user.DonatorProfile.DonationStarts.ToString(@"HH:mm"),
-                    DonationEnds = user.DonatorProfile.DonationEnds.ToString(@"HH:mm"),
-                    AverageScore = user.DonatorProfile.AverageScore,
-                    FavoritesCount = user.DonatorProfile.FavoritesCount
+                    Address = donatorProfile.Address,
+                    AddressStreet = donatorProfile.AddressStreet,
+                    AddressMunicipality = donatorProfile.AddressMunicipality,
+                    AddressCity = donatorProfile.AddressCity,
+                    AddressCountry = donatorProfile.AddressCountry,
+                    Latitude = donatorProfile.Latitude,
+                    Longitude = donatorProfile.Longitude,
+                    DonationStarts = donatorProfile.DonationStarts.ToString(@"HH:mm"),
+                    DonationEnds = donatorProfile.DonationEnds.ToString(@"HH:mm"),
+                    AverageScore = donatorProfile.AverageScore,
+                    FavoritesCount = donatorProfile.FavoritesCount
                 };
-
                 profile.DonatorProfile = donatorDto;
             }
 
-            var notifications = await _db.NotificationLogs
-                .Where(n => n.UserId == userId)
+            // Prepare notifications to return
+            var notifications = user.NotificationLogs
                 .OrderByDescending(n => n.SentAt)
-                .Select(n => new NotificationLogDto {
+                .Select(n => new NotificationLogDto
+                {
                     NotificationId = n.NotificationId,
                     Title = n.Title ?? string.Empty,
                     Message = n.Message ?? string.Empty,
                     SentAt = n.SentAt,
                     IsRead = n.IsRead
-                })
-                .ToListAsync();
-
-            return Ok(new { profile, notifications });
+                }).ToList();
+            
+            // Prepare favorite donators to return
+            var favoriteDonators = user.FavoriteDonators!
+                .OrderByDescending(fd => fd.FavoritedAt)
+                .Select(fd => new FavoriteDonatorDto
+                {
+                    FavoriteId = fd.FavouriteId,
+                    FavoritedAt = fd.FavoritedAt,
+                    DonatorProfile = new DonatorProfileDto
+                    {
+                        DonatorId = fd.DonatorProfile!.DonatorId,
+                        RestaurantName = fd.DonatorProfile.RestaurantName,
+                        ProfilePhotoUrl = fd.DonatorProfile.User?.ProfilePhotoUrl,
+                        Address = fd.DonatorProfile.Address,
+                        AddressStreet = fd.DonatorProfile.AddressStreet,
+                        AddressMunicipality = fd.DonatorProfile.AddressMunicipality,
+                        AddressCity = fd.DonatorProfile.AddressCity,
+                        AddressCountry = fd.DonatorProfile.AddressCountry,
+                        Latitude = fd.DonatorProfile.Latitude,
+                        Longitude = fd.DonatorProfile.Longitude,
+                        DonationStarts = fd.DonatorProfile.DonationStarts.ToString(@"HH:mm"),
+                        DonationEnds = fd.DonatorProfile.DonationEnds.ToString(@"HH:mm"),
+                        AverageScore = fd.DonatorProfile.AverageScore,
+                        FavoritesCount = fd.DonatorProfile.FavoritesCount
+                    }
+                }).ToList();
+            
+            return Ok(new { profile, notifications, favoriteDonators });
         }
         catch (Exception e)
         {
