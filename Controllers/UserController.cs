@@ -5,6 +5,7 @@ using FoodSeekerAPI.Data;
 using FoodSeekerAPI.DTO.Common;
 using FoodSeekerAPI.DTO.User;
 using FoodSeekerAPI.Models;
+using FoodSeekerAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 
 namespace FoodSeekerAPI.Controllers;
@@ -12,10 +13,13 @@ namespace FoodSeekerAPI.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class UserController(FoodSeekerContext db) : ControllerBase
+public class UserController(FoodSeekerContext db, TokenService tokenService, EmailService emailService, PasswordService passwordService) : ControllerBase
 {
     private readonly FoodSeekerContext _db = db;
-
+    private readonly TokenService _tokenService = tokenService;
+    private readonly EmailService _emailService = emailService;
+    private readonly PasswordService _passwordService = passwordService;
+    
     [HttpGet("profile")]
     public async Task<ActionResult<UserProfileDto>> GetProfile()
     {
@@ -175,40 +179,116 @@ public class UserController(FoodSeekerContext db) : ControllerBase
             throw;
         }
     }
-
-    // PUT: api/User/5
-    [HttpPut("{id}")]
-    public async Task<IActionResult> PutUser(long id, User user)
+    
+    [HttpPut("update-name")]
+    [Authorize]
+    public async Task<IActionResult> UpdateUserName([FromBody] UpdateUserNameRequestDto dto)
     {
-        if (id != user.UserId)
-            return BadRequest();
+        try
+        {
+            // Get user ID from JWT claims
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized();
 
-        var existingUser = await _db.Users.FindAsync(id);
-        if (existingUser == null)
-            return NotFound();
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                return NotFound();
 
-        // Update fields
-        existingUser.FullName = user.FullName;
-        existingUser.Email = user.Email;
-        existingUser.IsDonator = user.IsDonator;
-        existingUser.ProfilePhotoUrl = user.ProfilePhotoUrl;
-
-        await _db.SaveChangesAsync();
-
-        return NoContent();
+            // Update user's full name
+            user.FullName = dto.FullName;
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"(ERROR) Exception in UpdateUserName: {e.Message}");
+            return StatusCode(500, "Internal server error");
+        }
     }
-
-    // DELETE: api/User/5
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteUser(long id)
+    
+    [HttpPut("update-email")]
+    [Authorize]
+    public async Task<IActionResult> UpdateUserEmail([FromBody] UpdateUserEmailRequestDto dto)
     {
-        var user = await _db.Users.FindAsync(id);
-        if (user == null)
-            return NotFound();
+        try
+        {
+            // Get user ID from JWT claims
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized();
 
-        _db.Users.Remove(user);
-        await _db.SaveChangesAsync();
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                return NotFound();
+            
+            var token = _tokenService.GenerateEmailVerificationToken(user.UserId, dto.Email, 5);
+            var verificationLink = $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={token}";
 
-        return NoContent();
+            const string subject = "FoodSeeker - Changing Account Email";
+            string body = $"<h1>Hi there!</h1><p>You requested to change your current email address to '{dto.Email}'. To complete the process, please verify your new email <a href='{verificationLink}'>here</a>. Ignore if you don't want to.</p>";
+            await _emailService.SendEmailAsync(user.Email, subject, body);
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"(ERROR) Exception in UpdateUserEmail: {e.Message}");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+    
+    [HttpPut("update-password")]
+    [Authorize]
+    public async Task<IActionResult> UpdateUserPassword([FromBody] UpdateUserPasswordRequestDto dto)
+    {
+        try
+        {
+            // Get user ID from JWT claims
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized();
+
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                return NotFound();
+
+            // Update user's password
+            user.PasswordHash = _passwordService.HashPassword(dto.Password);
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"(ERROR) Exception in UpdateUserPassword: {e.Message}");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+    
+    [HttpPut("update-profile-photo")]
+    [Authorize]
+    public async Task<IActionResult> UpdateProfilePhoto([FromBody] UpdateProfilePhotoRequestDto dto)
+    {
+        try
+        {
+            // Get user ID from JWT claims
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized();
+
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                return NotFound();
+
+            // Update user's profile photo URL
+            var newPhotoUrl = dto.ProfilePhotoUrl.Length > 0 ? dto.ProfilePhotoUrl : null;
+            user.ProfilePhotoUrl = newPhotoUrl;
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"(ERROR) Exception in UpdateProfilePhoto: {e.Message}");
+            return StatusCode(500, "Internal server error");
+        }
     }
 }

@@ -15,6 +15,44 @@ public class FeedbackController(FoodSeekerContext db) : ControllerBase
 {
     private readonly FoodSeekerContext _db = db;
 
+    [HttpGet]
+    [Authorize]
+    public async Task<IActionResult> GetFeedbacks()
+    {
+        try
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
+                return Unauthorized();
+            var feedbacks = await _db.Feedbacks
+                .Where(f => f.FromUserId == userId || f.DonatorId == userId)
+                .Include(f => f.FromUser)
+                .Include(f => f.DonatorProfile)
+                .Include(f => f.DonatorProfile!.User)
+                .Select(f => new FeedbackDto
+                {
+                    FeedbackId = f.FeedbackId,
+                    FromUserId = f.FromUserId,
+                    UserFullName = f.FromUser != null ? f.FromUser.FullName : "Unknown",
+                    UserProfilePhotoUrl = f.FromUser!.ProfilePhotoUrl,
+                    Rating = f.Rating,
+                    Comment = f.Comment,
+                    DonatorId = f.DonatorId,
+                    RestaurantName = f.DonatorProfile != null ? f.DonatorProfile.RestaurantName : "Unknown",
+                    DonatorProfilePhotoUrl = f.DonatorProfile != null ? f.DonatorProfile.User!.ProfilePhotoUrl : null,
+                    CreatedAt = f.CreatedAt
+                })
+                .OrderByDescending(f => f.CreatedAt)
+                .ToListAsync();
+
+            return Ok(new { feedbacks });
+        }catch (Exception ex)
+        {
+            Console.WriteLine("Error fetching feedbacks: " + ex.Message);
+            return StatusCode(500, $"An error occurred while fetching feedbacks: {ex.Message}");
+        }
+    }
+
     [HttpGet("by-donator/{donatorId}")]
     public async Task<ActionResult<List<FeedbackDto>>> GetFeedbacksByDonator([FromRoute] long donatorId)
     {

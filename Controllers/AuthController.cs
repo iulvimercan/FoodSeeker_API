@@ -257,8 +257,17 @@ public class AuthController(
             // If already verified, inform client
             if (user.IsVerified)
             {
-                Console.WriteLine($"(LOG) User {userId} already verified at {DateTime.UtcNow}");
-                return Ok("Email is already verified.");
+                var email = principal.FindFirstValue(ClaimTypes.Email);
+                if (user.Email == email)
+                {
+                    Console.WriteLine($"(LOG) User {userId} already verified at {DateTime.UtcNow}");
+                    return Ok("Email is already verified.");
+                }
+                user.Email = email!; // Update email if it was changed
+                Console.WriteLine($"(LOG) User {userId} email updated to {email} at {DateTime.UtcNow}");
+                _db.Users.Update(user);
+                await _db.SaveChangesAsync();
+                return Ok("Email updated successfully.");
             }
 
             // Mark user as verified
