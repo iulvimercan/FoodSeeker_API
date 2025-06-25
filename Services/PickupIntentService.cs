@@ -81,6 +81,7 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
                     {
                         { "notificationId", notificationLog.NotificationId.ToString() },
                         { "sentAt", DateTime.UtcNow.ToString("o") },
+                        { "screen", "pickup_intents" }
                     };
                     var deviceToken = intent.User!.DeviceTokens.LastOrDefault();
                     if (deviceToken != null)
@@ -106,6 +107,67 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
         {
             // Log the exception (logging mechanism not shown here)
             Console.WriteLine($"Error removing pickup intents for food ID {foodId}: {e.Message}");
+            return false;
+        }
+    }
+    
+    public async Task<bool> NotifyFoodItemIsUpdatedAsync(FoodItem foodItem)
+    {
+        try
+        {
+            // Clean old pickup intents before notifying
+            await CleanOldPickupIntentsAsync();
+
+            var pickupIntents = await _db.PickupIntents
+                .Where(pi => pi.FoodId == foodItem.FoodId)
+                .Include(pi => pi.User)
+                .ThenInclude(u => u.DeviceTokens)
+                .ToListAsync();
+
+            if (pickupIntents.Count > 0)
+            {
+                // Notify users about the food item update
+                foreach (var intent in pickupIntents)
+                {
+                    var title = "Food Item Updated";
+                    var message = $"The food item '{foodItem.FoodName}' has been updated.";
+
+                    // Log the notification
+                    var notificationLog = new NotificationLog
+                    {
+                        UserId = intent.SeekerId,
+                        Title = title,
+                        Message = message,
+                        SentAt = DateTime.UtcNow
+                    };
+                    _db.NotificationLogs.Add(notificationLog);
+                    await _db.SaveChangesAsync();
+
+                    var data = new Dictionary<string, string>
+                    {
+                        { "notificationId", notificationLog.NotificationId.ToString() },
+                        { "sentAt", DateTime.UtcNow.ToString("o") },
+                        { "screen", "pickup_intents" }
+                    };
+                    var deviceToken = intent.User!.DeviceTokens.LastOrDefault();
+                    if (deviceToken != null)
+                    {
+                        await _notificationService.SendNotificationAsync(
+                            deviceToken.DeviceToken,
+                            title,
+                            message,
+                            data
+                        );
+                    }
+                }
+            }
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            // Log the exception (logging mechanism not shown here)
+            Console.WriteLine($"Error notifying food item update: {e.Message}");
             return false;
         }
     }
