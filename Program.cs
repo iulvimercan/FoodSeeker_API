@@ -6,6 +6,7 @@ using FoodSeekerAPI.Services;
 using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddEnvironmentVariables();
 // Turn off Entity Framework Core logging to reduce noise in the logs
 // Only log warnings and errors
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
@@ -42,11 +43,12 @@ app.UseAuthentication(); // 🔐 This validates the JWT token from requests
 app.UseAuthorization(); // 👮 This enforces [Authorize] attributes
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
+    c.RoutePrefix = ""; // serve swagger UI at root
+});
 
 // app.UseHttpsRedirection();
 
