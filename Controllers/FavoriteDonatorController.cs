@@ -61,6 +61,7 @@ public class FavoriteDonatorController(FoodSeekerContext db) : ControllerBase
                 {
                     DonatorId = donator.DonatorId,
                     RestaurantName = donator.RestaurantName,
+                    ProfilePhotoUrl = donator.User!.ProfilePhotoUrl,
                     Address = donator.Address,
                     AddressStreet = donator.AddressStreet,
                     AddressMunicipality = donator.AddressMunicipality,

@@ -22,9 +22,14 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
     public async Task<ActionResult<IEnumerable<FoodItemDto>>> GetFoodItemsByLocation(
         [FromQuery] double latitude,
         [FromQuery] double longitude,
+        [FromQuery] string? keyword,
         [FromQuery] double distanceKm = 30,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 3)
+        [FromQuery] bool eatIn = true,
+        [FromQuery] bool takeAway = true,
+        [FromQuery] bool bringPack = true,
+        [FromQuery] int pageSize = 30,
+        [FromQuery] int page = 1
+    )
     {
         try
         {
@@ -33,6 +38,14 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
 
             var foodItemsWithProfiles = await _db.FoodItems
                 .Where(fi => fi.IsActive &&
+                             (
+                                 (!eatIn && !takeAway && !bringPack) ||
+                                 (eatIn && fi.IsEatIn) ||
+                                 (takeAway && fi.IsTakeAway) ||
+                                 (bringPack && fi.IsBringPack)
+                             ) &&
+                             (string.IsNullOrEmpty(keyword) || fi.FoodName.Contains(keyword) ||
+                              (!string.IsNullOrEmpty(fi.Description) && fi.Description.Contains(keyword))) &&
                              fi.DonatorProfile != null &&
                              fi.DonatorProfile.Latitude >= latitude - degLat &&
                              fi.DonatorProfile.Latitude <= latitude + degLat &&
@@ -172,6 +185,8 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
 
             // Check if the food item belongs to the donator
             var foodItem = await _db.FoodItems
+                .Include(fi => fi.DonatorProfile)
+                    .ThenInclude(d => d!.User)
                 .FirstOrDefaultAsync(fi => fi.FoodId == foodItemId && fi.DonatorId == donatorId);
 
             if (foodItem == null)
@@ -188,8 +203,41 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
             _db.FoodItems.Update(foodItem);
             await _db.SaveChangesAsync();
 
+            // Notify food seekers with pickup intent for this food item
+            await _pickupIntentService.NotifyFoodItemIsUpdatedAsync(foodItem);
+            
+            var foodItemDto = new FoodItemDto
+            {
+                FoodId = foodItem.FoodId,
+                FoodName = foodItem.FoodName,
+                Description = foodItem.Description,
+                IsEatIn = foodItem.IsEatIn,
+                IsTakeAway = foodItem.IsTakeAway,
+                IsBringPack = foodItem.IsBringPack,
+                PhotoUrl = foodItem.PhotoUrl,
+                IsActive = foodItem.IsActive,
+                CreatedAt = foodItem.CreatedAt,
+                DonatorProfile = new DonatorProfileDto
+                {
+                    DonatorId = foodItem.DonatorProfile!.DonatorId,
+                    RestaurantName = foodItem.DonatorProfile.RestaurantName,
+                    ProfilePhotoUrl = foodItem.DonatorProfile.User?.ProfilePhotoUrl,
+                    Address = foodItem.DonatorProfile.Address,
+                    AddressStreet = foodItem.DonatorProfile.AddressStreet,
+                    AddressMunicipality = foodItem.DonatorProfile.AddressMunicipality,
+                    AddressCity = foodItem.DonatorProfile.AddressCity,
+                    AddressCountry = foodItem.DonatorProfile.AddressCountry,
+                    Latitude = foodItem.DonatorProfile.Latitude,
+                    Longitude = foodItem.DonatorProfile.Longitude,
+                    DonationStarts = foodItem.DonatorProfile.DonationStarts.ToString("HH:mm"),
+                    DonationEnds = foodItem.DonatorProfile.DonationEnds.ToString("HH:mm"),
+                    AverageScore = (double)foodItem.DonatorProfile.AverageScore,
+                    FavoritesCount = foodItem.DonatorProfile.FavoritesCount
+                }
+            };
+            
             var message = "Food item is updated successfully!";
-            return Ok(new { message, foodItem });
+            return Ok(new { message, foodItem= foodItemDto });
         }
         catch (Exception e)
         {
@@ -258,7 +306,7 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
 
             if (foodItem == null)
                 return NotFound("Food item not found.");
-            
+
             // Remove pickup intents associated with this food item
             await _pickupIntentService.RemovePickupIntentsByFoodIdAndNotifyAsync(foodItemId);
 

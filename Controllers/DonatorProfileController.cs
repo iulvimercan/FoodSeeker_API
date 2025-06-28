@@ -49,7 +49,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
                     DonationEnds = d.DonationEnds.ToString("HH:mm"),
                     AverageScore = d.AverageScore,
                     FavoritesCount = d.FavoritesCount,
-                    FoodItemsCount = d.FoodItems!.Count
+                    FoodItemsCount = Enumerable.Count(d.FoodItems!, fi => fi.IsActive)
                 })
                 .ToListAsync();
 
@@ -87,7 +87,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
                     DonationEnds = d.DonationEnds.ToString("HH:mm"),
                     AverageScore = d.AverageScore,
                     FavoritesCount = d.FavoritesCount,
-                    FoodItemsCount = d.FoodItems!.Count
+                    FoodItemsCount = Enumerable.Count(d.FoodItems!, fi => fi.IsActive)
                 })
                 .FirstOrDefaultAsync();
 
@@ -118,11 +118,11 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
             var donatorProfile = await _db.DonatorProfiles.Where(dp => dp.DonatorId == userId).FirstOrDefaultAsync();
             if (donatorProfile == null)
                 return NotFound($"Donator profile not found for user ID {userId}.");
-            
+
             donatorProfile.RestaurantName = dto.RestaurantName;
             _db.DonatorProfiles.Update(donatorProfile);
             await _db.SaveChangesAsync();
-            
+
             return Ok();
         }
         catch (Exception e)
@@ -131,7 +131,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
             return StatusCode(500, $"An error occurred while updating the restaurant name: {e.Message}");
         }
     }
-    
+
     [HttpPut("update-restaurant-address")]
     [Authorize(Roles = "Donator")]
     public async Task<IActionResult> UpdateRestaurantAddress([FromBody] UpdateRestaurantAddressRequestDto dto)
@@ -145,7 +145,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
             var donatorProfile = await _db.DonatorProfiles.Where(dp => dp.DonatorId == userId).FirstOrDefaultAsync();
             if (donatorProfile == null)
                 return NotFound($"Donator profile not found for user ID {userId}.");
-            
+
             donatorProfile.Address = dto.Address;
             donatorProfile.AddressStreet = dto.AddressStreet;
             donatorProfile.AddressMunicipality = dto.AddressMunicipality;
@@ -156,7 +156,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
 
             _db.DonatorProfiles.Update(donatorProfile);
             await _db.SaveChangesAsync();
-            
+
             return Ok();
         }
         catch (Exception e)
@@ -165,7 +165,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
             return StatusCode(500, $"An error occurred while updating the restaurant address: {e.Message}");
         }
     }
-    
+
     [HttpPut("update-donation-times")]
     [Authorize(Roles = "Donator")]
     public async Task<IActionResult> UpdateDonationStartTime([FromBody] UpdateDonationTimeRequestDto dto)
@@ -177,15 +177,15 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
             if (userIdString == null || !long.TryParse(userIdString, out long userId))
                 return Unauthorized("User ID not found in token.");
             Console.WriteLine("2");
-            
+
             var donatorProfile = await _db.DonatorProfiles.Where(dp => dp.DonatorId == userId).FirstOrDefaultAsync();
             if (donatorProfile == null)
                 return NotFound($"Donator profile not found for user ID {userId}.");
-            
+
             Console.WriteLine("3");
             if (dto.DonationStarts.HasValue)
                 donatorProfile.DonationStarts = dto.DonationStarts.Value;
-            
+
             Console.WriteLine("4");
             if (dto.DonationEnds.HasValue)
                 donatorProfile.DonationEnds = dto.DonationEnds.Value;

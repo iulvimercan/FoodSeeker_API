@@ -284,4 +284,87 @@ public class AuthController(
             return StatusCode(500, "An unexpected error occurred. Please try again later.");
         }
     }
+    
+    /// <summary>
+    /// Handles forgot password requests.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto dto)
+    {
+        try
+        {
+            Console.WriteLine($"(LOG) Forgot password request for email: {dto.Email} at {DateTime.UtcNow}");
+
+            // 1. Find user by email
+            var user = await _db.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
+            if (user is null)
+                return NotFound("User with this email does not exist.");
+
+            // 2. Generate password reset token
+            var token = _tokenService.GeneratePasswordResetToken(user.UserId, user.Email);
+            var resetLink = $"{Request.Scheme}://{Request.Host}/api/auth/reset-password?token={token}";
+
+            // 3. Send password reset email
+            const string subject = "Password Reset Request";
+            string body = $"<h1>Password Reset Request</h1><p>To reset your password, please copy this following token and paste it to the reset password screen. <br> Token: <strong>{token}</strong></p><p>If you did not request this, please ignore this email.</p>";
+            await _emailService.SendEmailAsync(dto.Email, subject, body);
+
+            Console.WriteLine($"(LOG) Password reset email sent to {dto.Email} at {DateTime.UtcNow}");
+            return Ok("Password reset link has been sent to your email.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"(ERROR) An error occurred during forgot password: {ex.Message}");
+            return StatusCode(500, "An unexpected error occurred. Please try again later.");
+        }
+    }
+    
+    /// <summary>
+    /// Handles password reset requests.
+    /// </summary>
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto dto)
+    {
+        try
+        {
+            Console.WriteLine($"(LOG) Password reset request with token: {dto.Token} at {DateTime.UtcNow}");
+
+            // 1. Validate the password reset token
+            var principal = _tokenService.ValidatePasswordResetToken(dto.Token);
+            if (principal == null)
+            {
+                Console.WriteLine($"(ERROR) Invalid password reset token at {DateTime.UtcNow}");
+                return BadRequest("Invalid or expired token.");
+            }
+
+            // 2. Extract user ID from token claims
+            var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !long.TryParse(userIdClaim.Value, out long userId))
+            {
+                Console.WriteLine($"(ERROR) Invalid user ID in token at {DateTime.UtcNow}");
+                return BadRequest("Invalid token structure.");
+            }
+
+            // 3. Find user by ID
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+            {
+                Console.WriteLine($"(ERROR) User not found for ID {userId} at {DateTime.UtcNow}");
+                return NotFound("User not found.");
+            }
+
+            // 4. Hash the new password and update user
+            user.PasswordHash = _passwordService.HashPassword(dto.NewPassword);
+            _db.Users.Update(user);
+            await _db.SaveChangesAsync();
+
+            Console.WriteLine($"(LOG) Password reset successful for user {userId} at {DateTime.UtcNow}");
+            return Ok("Password has been reset successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"(ERROR) An error occurred during password reset: {ex.Message}");
+            return StatusCode(500, "An unexpected error occurred. Please try again later.");
+        }
+    }
 }
