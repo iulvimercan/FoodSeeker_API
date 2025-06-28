@@ -1,9 +1,19 @@
-﻿namespace FoodSeekerAPI.DTO.Auth;
-
-public class SignUpFoodSeekerRequestDto
+﻿namespace FoodSeekerAPI.DTO.Auth
 {
-    public required string FullName { get; set; }
-    public required string Email { get; set; }
-    public required string Password { get; set; }
-    public string? ProfilePhotoUrl { get; set; }
+    // DTO for food seeker signup request.
+    // Contains basic user registration information for food seekers.
+    public class SignUpFoodSeekerRequestDto
+    {
+        // Full name of the food seeker.
+        public required string FullName { get; set; }
+
+        // Email address used for login and communication.
+        public required string Email { get; set; }
+
+        // Password for account authentication.
+        public required string Password { get; set; }
+
+        // Optional URL for the user's profile photo.
+        public string? ProfilePhotoUrl { get; set; }
+    }
 }

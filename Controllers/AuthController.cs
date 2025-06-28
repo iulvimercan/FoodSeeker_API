@@ -10,6 +10,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FoodSeekerAPI.Controllers;
 
+/// <summary>
+/// Handles authentication and account-related endpoints (login, sign-up, email verification, password reset).
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController(
@@ -19,14 +22,14 @@ public class AuthController(
     EmailService emailService)
     : ControllerBase
 {
-    // Dependencies injected via constructor
+    // Injected dependencies via primary constructor
     private readonly FoodSeekerContext _db = db;
     private readonly TokenService _tokenService = tokenService;
     private readonly PasswordService _passwordService = passwordService;
     private readonly EmailService _emailService = emailService;
 
     /// <summary>
-    /// Handles user login requests.
+    /// Authenticates the user and returns a JWT token if valid.
     /// </summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto dto)
@@ -35,44 +38,43 @@ public class AuthController(
         {
             Console.WriteLine($"(LOG) Login attempt with email: {dto.Email} at {DateTime.UtcNow}");
 
-            // 1. Find user by email
+            // 1. Check if the user exists
             var user = await _db.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
             if (user is null)
                 return Unauthorized("Invalid email or password");
 
-            // 2. Validate the password hash
+            // 2. Validate password hash
             if (!_passwordService.VerifyPassword(dto.Password, user.PasswordHash))
                 return Unauthorized("Invalid email or password");
 
-            // 3. Check if user email is verified; if not, send verification email
+            // 3. If user is not verified, send a verification email and deny login
             if (!user.IsVerified)
             {
                 var emailVerificationToken = _tokenService.GenerateEmailVerificationToken(user.UserId, user.Email);
                 var verificationLink = $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={emailVerificationToken}";
 
-                // Email content for verification
                 const string subject = "Email Verification Required";
                 string body = $"<h1>Email Verification Required</h1><p>Please verify your email by clicking <a href='{verificationLink}'>here</a>. If this wasn't you, please ignore this email.</p>";
-                await _emailService.SendEmailAsync(user.Email, subject, body);
 
+                await _emailService.SendEmailAsync(user.Email, subject, body);
                 return BadRequest("Please verify your email before logging in.");
             }
-            
-            // 4. Generate JWT token for authenticated user
+
+            // 4. Generate JWT access token
             var token = _tokenService.GenerateApiAccessToken(user.UserId, user.IsDonator);
-            
-            // 5. Return user info and token
+
+            // 5. Return token
             return Ok(new { token });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"(ERROR) An error occurred during login: {ex.Message}");
+            Console.WriteLine($"(ERROR) Login error: {ex.Message}");
             return StatusCode(500, "An unexpected error occurred. Please try again later.");
         }
     }
 
     /// <summary>
-    /// Registers a new Food Seeker user.
+    /// Registers a new user as a Food Seeker.
     /// </summary>
     [HttpPost("sign-up/food-seeker")]
     public async Task<IActionResult> SignUpFoodSeeker([FromBody] SignUpFoodSeekerRequestDto dto)
@@ -81,14 +83,15 @@ public class AuthController(
         {
             Console.WriteLine($"(LOG) Sign-up attempt with email: {dto.Email} at {DateTime.UtcNow}");
 
-            // 1. Check if email already exists
+            // 1. Check for existing user
             var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
             if (existingUser != null)
             {
+                // If already verified, reject
                 if (existingUser.IsVerified)
                     return Conflict("User with this email already exists.");
 
-                // Remove unverified user and related donator profile if applicable
+                // Remove unverified user (and donator profile if exists)
                 if (existingUser.IsDonator)
                 {
                     var donatorProfile = await _db.DonatorProfiles.FirstOrDefaultAsync(dp => dp.DonatorId == existingUser.UserId);
@@ -97,13 +100,13 @@ public class AuthController(
 
                 _db.Users.Remove(existingUser);
                 await _db.SaveChangesAsync();
-                Console.WriteLine($"(LOG) Deleted unverified user with email: {dto.Email} at {DateTime.UtcNow}");
+                Console.WriteLine($"(LOG) Removed unverified duplicate: {dto.Email}");
             }
 
-            // 2. Hash the user's password
+            // 2. Hash password
             var passwordHash = _passwordService.HashPassword(dto.Password);
 
-            // 3. Create and save new user
+            // 3. Create new user record
             var newUser = new User
             {
                 FullName = dto.FullName,
@@ -116,43 +119,40 @@ public class AuthController(
             _db.Users.Add(newUser);
             await _db.SaveChangesAsync();
 
-            // 4. Generate email verification token and link
+            // 4. Send email verification link
             var token = _tokenService.GenerateEmailVerificationToken(newUser.UserId, newUser.Email);
             var verificationLink = $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={token}";
 
-            // 5. Send welcome and verification email
             const string subject = "Welcome to FoodSeeker!";
-            string body = $"<h1>Welcome to FoodSeeker!</h1><p>Thank you for signing up. Please verify your email <a href='{verificationLink}'>here</a>. Ignore if you didn't register.</p>";
+            string body = $"<h1>Welcome to FoodSeeker!</h1><p>Please verify your email <a href='{verificationLink}'>here</a>. Ignore if you didn't register.</p>";
             await _emailService.SendEmailAsync(dto.Email, subject, body);
 
-            // 6. Respond success
             return Ok("Sign-up successful! Please check your email to verify your account.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"(ERROR) An error occurred during food seeker sign-up: {ex.Message}");
+            Console.WriteLine($"(ERROR) Food Seeker Sign-up error: {ex.Message}");
             return StatusCode(500, "An unexpected error occurred. Please try again later.");
         }
     }
 
     /// <summary>
-    /// Registers a new Donator user along with their profile.
+    /// Registers a new user as a Donator and creates a Donator profile.
     /// </summary>
     [HttpPost("sign-up/donator")]
     public async Task<IActionResult> SignUpDonator([FromBody] SignUpDonatorRequestDto dto)
     {
         try
         {
-            Console.WriteLine($"(LOG) Donator sign-up attempt with email: {dto.Email} at {DateTime.UtcNow}");
+            Console.WriteLine($"(LOG) Donator sign-up attempt: {dto.Email}");
 
-            // 1. Check if email already exists
+            // 1. Handle duplicate unverified user
             var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
             if (existingUser != null)
             {
                 if (existingUser.IsVerified)
                     return Conflict("User with this email already exists.");
 
-                // Remove unverified user and related donator profile
                 if (existingUser.IsDonator)
                 {
                     var donatorProfile = await _db.DonatorProfiles.FirstOrDefaultAsync(dp => dp.DonatorId == existingUser.UserId);
@@ -161,13 +161,12 @@ public class AuthController(
 
                 _db.Users.Remove(existingUser);
                 await _db.SaveChangesAsync();
-                Console.WriteLine($"(LOG) Deleted unverified user with email: {dto.Email} at {DateTime.UtcNow}");
+                Console.WriteLine($"(LOG) Removed unverified donator: {dto.Email}");
             }
 
-            // 2. Hash the password
+            // 2. Hash password and create new donator user
             var passwordHash = _passwordService.HashPassword(dto.Password);
 
-            // 3. Create and save new donator user
             var newUser = new User
             {
                 FullName = dto.FullName,
@@ -180,8 +179,8 @@ public class AuthController(
             _db.Users.Add(newUser);
             await _db.SaveChangesAsync();
 
-            // 4. Create donator profile linked to user
-            var newDonatorProfile = new DonatorProfile
+            // 3. Create DonatorProfile
+            var newProfile = new DonatorProfile
             {
                 DonatorId = newUser.UserId,
                 RestaurantName = dto.RestaurantName,
@@ -195,175 +194,134 @@ public class AuthController(
                 DonationStarts = dto.DonationStarts,
                 DonationEnds = dto.DonationEnds,
             };
-            _db.DonatorProfiles.Add(newDonatorProfile);
+            _db.DonatorProfiles.Add(newProfile);
             await _db.SaveChangesAsync();
 
-            // 5. Generate email verification token and send email
+            // 4. Send email verification
             var token = _tokenService.GenerateEmailVerificationToken(newUser.UserId, newUser.Email);
             var verificationLink = $"{Request.Scheme}://{Request.Host}/api/auth/verify-email?token={token}";
 
             const string subject = "Welcome to FoodSeeker!";
-            string body = $"<h1>Welcome to FoodSeeker!</h1><p>Thank you for signing up as a donator. Please verify your email <a href='{verificationLink}'>here</a>. Ignore if you didn't register.</p>";
+            string body = $"<h1>Welcome to FoodSeeker!</h1><p>Thank you for signing up as a donator. Please verify your email <a href='{verificationLink}'>here</a>.</p>";
             await _emailService.SendEmailAsync(dto.Email, subject, body);
 
-            // 6. Respond success
             return Ok("Sign-up successful! Please check your email to verify your account.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"(ERROR) An error occurred during donator sign-up: {ex.Message}");
+            Console.WriteLine($"(ERROR) Donator Sign-up error: {ex.Message}");
             return StatusCode(500, "An unexpected error occurred. Please try again later.");
         }
     }
 
     /// <summary>
-    /// Verifies user's email address using a token.
+    /// Verifies user's email address from the token.
     /// </summary>
     [HttpGet("verify-email")]
     public async Task<IActionResult> VerifyEmail([FromQuery] string token)
     {
         try
         {
-            // Validate the token and extract claims principal
+            // 1. Validate token
             var principal = _tokenService.ValidateEmailVerificationToken(token);
             if (principal == null)
-            {
-                Console.WriteLine($"(ERROR) Invalid email verification token at {DateTime.UtcNow}");
                 return BadRequest("Invalid or expired token.");
-            }
 
-            // Extract user ID claim from token
+            // 2. Extract user ID from claims
             var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null)
-            {
-                Console.WriteLine($"(ERROR) Token missing user ID claim at {DateTime.UtcNow}");
+            if (userIdClaim == null || !long.TryParse(userIdClaim.Value, out long userId))
                 return BadRequest("Invalid token structure.");
-            }
 
-            if (!long.TryParse(userIdClaim.Value, out long userId))
-            {
-                Console.WriteLine($"(ERROR) Invalid user ID format in token at {DateTime.UtcNow}");
-                return BadRequest("Invalid token structure.");
-            }
-
-            // Find user by ID
             var user = await _db.Users.FindAsync(userId);
             if (user == null)
-            {
-                Console.WriteLine($"(ERROR) User not found for ID {userId} at {DateTime.UtcNow}");
                 return NotFound("User not found.");
-            }
 
-            // If already verified, inform client
+            // 3. If already verified, optionally update email
             if (user.IsVerified)
             {
                 var email = principal.FindFirstValue(ClaimTypes.Email);
-                if (user.Email == email)
+                if (user.Email != email)
                 {
-                    Console.WriteLine($"(LOG) User {userId} already verified at {DateTime.UtcNow}");
-                    return Ok("Email is already verified.");
+                    user.Email = email!;
+                    _db.Users.Update(user);
+                    await _db.SaveChangesAsync();
+                    return Ok("Email updated successfully.");
                 }
-                user.Email = email!; // Update email if it was changed
-                Console.WriteLine($"(LOG) User {userId} email updated to {email} at {DateTime.UtcNow}");
-                _db.Users.Update(user);
-                await _db.SaveChangesAsync();
-                return Ok("Email updated successfully.");
+
+                return Ok("Email is already verified.");
             }
 
-            // Mark user as verified
+            // 4. Mark as verified
             user.IsVerified = true;
             _db.Users.Update(user);
             await _db.SaveChangesAsync();
 
-            Console.WriteLine($"(LOG) User {userId} verified at {DateTime.UtcNow}");
             return Ok("Email verified successfully.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"(ERROR) An error occurred during email verification: {ex.Message}");
+            Console.WriteLine($"(ERROR) Email verification error: {ex.Message}");
             return StatusCode(500, "An unexpected error occurred. Please try again later.");
         }
     }
-    
+
     /// <summary>
-    /// Handles forgot password requests.
+    /// Sends a password reset email with a token.
     /// </summary>
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto dto)
     {
         try
         {
-            Console.WriteLine($"(LOG) Forgot password request for email: {dto.Email} at {DateTime.UtcNow}");
-
-            // 1. Find user by email
             var user = await _db.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
-            if (user is null)
+            if (user == null)
                 return NotFound("User with this email does not exist.");
 
-            // 2. Generate password reset token
             var token = _tokenService.GeneratePasswordResetToken(user.UserId, user.Email);
             var resetLink = $"{Request.Scheme}://{Request.Host}/api/auth/reset-password?token={token}";
 
-            // 3. Send password reset email
             const string subject = "Password Reset Request";
-            string body = $"<h1>Password Reset Request</h1><p>To reset your password, please copy this following token and paste it to the reset password screen. <br> Token: <strong>{token}</strong></p><p>If you did not request this, please ignore this email.</p>";
+            string body = $"<h1>Password Reset Request</h1><p>To reset your password, copy and paste the token: <strong>{token}</strong> into the reset screen.</p>";
             await _emailService.SendEmailAsync(dto.Email, subject, body);
 
-            Console.WriteLine($"(LOG) Password reset email sent to {dto.Email} at {DateTime.UtcNow}");
-            return Ok("Password reset link has been sent to your email.");
+            return Ok("Password reset token has been sent to your email.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"(ERROR) An error occurred during forgot password: {ex.Message}");
+            Console.WriteLine($"(ERROR) Forgot password error: {ex.Message}");
             return StatusCode(500, "An unexpected error occurred. Please try again later.");
         }
     }
-    
+
     /// <summary>
-    /// Handles password reset requests.
+    /// Resets the user's password using the provided token.
     /// </summary>
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto dto)
     {
         try
         {
-            Console.WriteLine($"(LOG) Password reset request with token: {dto.Token} at {DateTime.UtcNow}");
-
-            // 1. Validate the password reset token
             var principal = _tokenService.ValidatePasswordResetToken(dto.Token);
             if (principal == null)
-            {
-                Console.WriteLine($"(ERROR) Invalid password reset token at {DateTime.UtcNow}");
                 return BadRequest("Invalid or expired token.");
-            }
 
-            // 2. Extract user ID from token claims
             var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !long.TryParse(userIdClaim.Value, out long userId))
-            {
-                Console.WriteLine($"(ERROR) Invalid user ID in token at {DateTime.UtcNow}");
                 return BadRequest("Invalid token structure.");
-            }
 
-            // 3. Find user by ID
             var user = await _db.Users.FindAsync(userId);
             if (user == null)
-            {
-                Console.WriteLine($"(ERROR) User not found for ID {userId} at {DateTime.UtcNow}");
                 return NotFound("User not found.");
-            }
 
-            // 4. Hash the new password and update user
             user.PasswordHash = _passwordService.HashPassword(dto.NewPassword);
             _db.Users.Update(user);
             await _db.SaveChangesAsync();
 
-            Console.WriteLine($"(LOG) Password reset successful for user {userId} at {DateTime.UtcNow}");
             return Ok("Password has been reset successfully.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"(ERROR) An error occurred during password reset: {ex.Message}");
+            Console.WriteLine($"(ERROR) Password reset error: {ex.Message}");
             return StatusCode(500, "An unexpected error occurred. Please try again later.");
         }
     }

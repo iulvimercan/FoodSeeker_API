@@ -7,13 +7,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FoodSeekerAPI.Controllers;
 
+/// <summary>
+/// Manages donator profile data such as location, address, name, and donation hours.
+/// </summary>
 [Route("api/donator")]
 [ApiController]
 public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
 {
     private readonly FoodSeekerContext _db = db;
 
-
+    /// <summary>
+    /// Returns a list of nearby donators within a specified distance (default: 30km).
+    /// </summary>
     [HttpGet("nearby")]
     public async Task<IActionResult> GetDonatorsByLocation(
         [FromQuery] double latitude,
@@ -22,9 +27,11 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
     {
         try
         {
+            // Convert distance in kilometers to degrees
             double degLat = distanceKm / 111.32;
             double degLon = distanceKm / (111.32 * Math.Cos(latitude * Math.PI / 180));
 
+            // Query nearby donator profiles and return mapped DTOs
             var donators = await _db.DonatorProfiles
                 .Where(d => d.Latitude >= latitude - degLat &&
                             d.Latitude <= latitude + degLat &&
@@ -62,6 +69,9 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Returns the full donator profile for the given donator ID.
+    /// </summary>
     [HttpGet("profile/{donatorId:long}")]
     public async Task<IActionResult> GetDonatorProfileById(long donatorId)
     {
@@ -92,9 +102,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
                 .FirstOrDefaultAsync();
 
             if (donatorProfile == null)
-            {
                 return NotFound($"Donator profile with ID {donatorId} not found.");
-            }
 
             return Ok(new { donatorProfile });
         }
@@ -105,6 +113,9 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Updates the restaurant name of the currently logged-in donator.
+    /// </summary>
     [HttpPut("update-restaurant-name")]
     [Authorize(Roles = "Donator")]
     public async Task<IActionResult> UpdateRestaurantName([FromBody] UpdateRestaurantNameRequestDto dto)
@@ -115,7 +126,7 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
             if (userIdString == null || !long.TryParse(userIdString, out long userId))
                 return Unauthorized("User ID not found in token.");
 
-            var donatorProfile = await _db.DonatorProfiles.Where(dp => dp.DonatorId == userId).FirstOrDefaultAsync();
+            var donatorProfile = await _db.DonatorProfiles.FirstOrDefaultAsync(dp => dp.DonatorId == userId);
             if (donatorProfile == null)
                 return NotFound($"Donator profile not found for user ID {userId}.");
 
@@ -132,6 +143,9 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Updates the address and coordinates of the donator's restaurant.
+    /// </summary>
     [HttpPut("update-restaurant-address")]
     [Authorize(Roles = "Donator")]
     public async Task<IActionResult> UpdateRestaurantAddress([FromBody] UpdateRestaurantAddressRequestDto dto)
@@ -142,10 +156,11 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
             if (userIdString == null || !long.TryParse(userIdString, out long userId))
                 return Unauthorized("User ID not found in token.");
 
-            var donatorProfile = await _db.DonatorProfiles.Where(dp => dp.DonatorId == userId).FirstOrDefaultAsync();
+            var donatorProfile = await _db.DonatorProfiles.FirstOrDefaultAsync(dp => dp.DonatorId == userId);
             if (donatorProfile == null)
                 return NotFound($"Donator profile not found for user ID {userId}.");
 
+            // Update all address-related fields
             donatorProfile.Address = dto.Address;
             donatorProfile.AddressStreet = dto.AddressStreet;
             donatorProfile.AddressMunicipality = dto.AddressMunicipality;
@@ -166,34 +181,33 @@ public class DonatorProfileController(FoodSeekerContext db) : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Updates the start and end time for donations by the donator.
+    /// </summary>
     [HttpPut("update-donation-times")]
     [Authorize(Roles = "Donator")]
     public async Task<IActionResult> UpdateDonationStartTime([FromBody] UpdateDonationTimeRequestDto dto)
     {
         try
         {
-            Console.WriteLine("1");
             var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdString == null || !long.TryParse(userIdString, out long userId))
                 return Unauthorized("User ID not found in token.");
-            Console.WriteLine("2");
 
-            var donatorProfile = await _db.DonatorProfiles.Where(dp => dp.DonatorId == userId).FirstOrDefaultAsync();
+            var donatorProfile = await _db.DonatorProfiles.FirstOrDefaultAsync(dp => dp.DonatorId == userId);
             if (donatorProfile == null)
                 return NotFound($"Donator profile not found for user ID {userId}.");
 
-            Console.WriteLine("3");
+            // Update fields only if they are provided
             if (dto.DonationStarts.HasValue)
                 donatorProfile.DonationStarts = dto.DonationStarts.Value;
 
-            Console.WriteLine("4");
             if (dto.DonationEnds.HasValue)
                 donatorProfile.DonationEnds = dto.DonationEnds.Value;
-            Console.WriteLine("5");
+
             _db.DonatorProfiles.Update(donatorProfile);
-            Console.WriteLine("6");
             await _db.SaveChangesAsync();
-            Console.WriteLine("7");
+
             return Ok();
         }
         catch (Exception e)
