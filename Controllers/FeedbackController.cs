@@ -49,8 +49,8 @@ public class FeedbackController(FoodSeekerContext db) : ControllerBase
                     Rating = f.Rating,
                     Comment = f.Comment,
                     DonatorId = f.DonatorId,
-                    RestaurantName = f.DonatorProfile?.RestaurantName ?? "Unknown",
-                    DonatorProfilePhotoUrl = f.DonatorProfile?.User?.ProfilePhotoUrl,
+                    RestaurantName = f.DonatorProfile != null ? f.DonatorProfile.RestaurantName : "Unknown",
+                    DonatorProfilePhotoUrl = f.DonatorProfile != null ? f.DonatorProfile.User!.ProfilePhotoUrl : null,
                     CreatedAt = f.CreatedAt
                 })
                 .OrderByDescending(f => f.CreatedAt)
@@ -88,8 +88,8 @@ public class FeedbackController(FoodSeekerContext db) : ControllerBase
                     Rating = f.Rating,
                     Comment = f.Comment,
                     DonatorId = f.DonatorId,
-                    RestaurantName = f.DonatorProfile?.RestaurantName ?? "Unknown",
-                    DonatorProfilePhotoUrl = f.DonatorProfile?.User?.ProfilePhotoUrl,
+                    RestaurantName = f.DonatorProfile != null ? f.DonatorProfile.RestaurantName : "Unknown",
+                    DonatorProfilePhotoUrl = f.DonatorProfile != null ? f.DonatorProfile.User!.ProfilePhotoUrl : null,
                     CreatedAt = f.CreatedAt
                 })
                 .OrderByDescending(f => f.CreatedAt)
