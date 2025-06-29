@@ -1,6 +1,9 @@
-﻿namespace FoodSeekerAPI.DTO.User;
-
-public class UpdateUserPasswordRequestDto
+﻿namespace FoodSeekerAPI.DTO.User
 {
-    public required string Password { get; set; } 
+    // DTO for updating the user's password.
+    public class UpdateUserPasswordRequestDto
+    {
+        // New password (required).
+        public required string Password { get; set; }
+    }
 }

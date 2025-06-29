@@ -14,31 +14,33 @@ public class UserDeviceTokenController(FoodSeekerContext db) : ControllerBase
 {
     private readonly FoodSeekerContext _db = db;
 
+    /// <summary>
+    /// Stores the device token for push notification purposes.
+    /// Each user-device-token pair is stored only once.
+    /// </summary>
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> SaveUserDeviceToken([FromBody] UserDeviceTokenDto dto)
     {
         try
         {
+            // Extract authenticated user ID from JWT claims
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
-            {
                 return Unauthorized("User not authenticated.");
-            }
 
+            // Validate required fields
             if (string.IsNullOrWhiteSpace(dto.DeviceToken))
-            {
                 return BadRequest("Invalid device token.");
-            }
 
             if (dto.Platform != "Android" && dto.Platform != "iOS")
-            {
                 return BadRequest("Platform must be either 'Android' or 'iOS'.");
-            }
 
+            // Check if the token already exists for this user
             var existingToken = await _db.UserDeviceTokens
                 .FirstOrDefaultAsync(t => t.UserId == userId && t.DeviceToken == dto.DeviceToken);
 
+            // If not, add it to the database
             if (existingToken == null)
             {
                 var newToken = new UserDeviceToken
@@ -52,7 +54,6 @@ public class UserDeviceTokenController(FoodSeekerContext db) : ControllerBase
             }
 
             await _db.SaveChangesAsync();
-
             return Ok("Device token saved successfully.");
         }
         catch (Exception e)
@@ -62,28 +63,32 @@ public class UserDeviceTokenController(FoodSeekerContext db) : ControllerBase
         }
     }
 
-
+    /// <summary>
+    /// Deletes the given device token for the authenticated user.
+    /// </summary>
     [HttpDelete]
     [Authorize]
     public async Task<IActionResult> DeleteUserDeviceToken([FromBody] UserDeviceTokenDto dto)
     {
         try
         {
+            // Extract authenticated user ID
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
-            {
                 return Unauthorized("User not authenticated.");
-            }
 
+            // Validate input
             if (string.IsNullOrWhiteSpace(dto.DeviceToken))
                 return BadRequest("Invalid device token.");
-            
+
+            // Look for the token record for this user
             var existingToken = await _db.UserDeviceTokens
                 .FirstOrDefaultAsync(t => t.UserId == userId && t.DeviceToken == dto.DeviceToken);
 
             if (existingToken == null)
                 return NotFound("Device token not found for the user.");
 
+            // Remove the token
             _db.UserDeviceTokens.Remove(existingToken);
             await _db.SaveChangesAsync();
 

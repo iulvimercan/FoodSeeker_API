@@ -18,6 +18,9 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
     private readonly FoodSeekerContext _db = db;
     private readonly PickupIntentService _pickupIntentService = pickupIntentService;
 
+    /// <summary>
+    /// Retrieves a paginated list of nearby active food items filtered by optional parameters.
+    /// </summary>
     [HttpGet("nearby")]
     public async Task<ActionResult<IEnumerable<FoodItemDto>>> GetFoodItemsByLocation(
         [FromQuery] double latitude,
@@ -33,13 +36,15 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
     {
         try
         {
+            // Convert distance in km to degrees for bounding box search
             double degLat = distanceKm / 111.32;
             double degLon = distanceKm / (111.32 * Math.Cos(latitude * Math.PI / 180));
 
+            // Fetch filtered food items within the bounding box and matching keyword/type filters
             var foodItemsWithProfiles = await _db.FoodItems
                 .Where(fi => fi.IsActive &&
                              (
-                                 (!eatIn && !takeAway && !bringPack) ||
+                                 (!eatIn && !takeAway && !bringPack) || // No filter case
                                  (eatIn && fi.IsEatIn) ||
                                  (takeAway && fi.IsTakeAway) ||
                                  (bringPack && fi.IsBringPack)
@@ -55,6 +60,7 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
                 .Include(fi => fi.DonatorProfile!.User)
                 .ToListAsync();
 
+            // Project into DTOs with calculated distances and pagination
             var sorted = foodItemsWithProfiles
                 .Select(fi =>
                     new FoodItemDto
@@ -91,7 +97,7 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
                             FavoritesCount = fi.DonatorProfile.FavoritesCount
                         }
                     })
-                .OrderBy(fi => fi.DonatorProfile!.Distance)
+                .OrderBy(fi => fi.DonatorProfile!.Distance) // Sort by closest distance
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToList();
@@ -105,6 +111,9 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
         }
     }
 
+    /// <summary>
+    /// Allows a donator to create a new food item.
+    /// </summary>
     [HttpPost]
     [Authorize(Roles = "Donator")]
     public async Task<IActionResult> CreateFoodItem([FromBody] CreateFoodItemRequestDto dto)
@@ -127,12 +136,10 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Add food item to the database
             await _db.FoodItems.AddAsync(foodItem);
             await _db.SaveChangesAsync();
 
-            var message = "Food item created successfully!";
-            return Ok(new { message, foodItem });
+            return Ok(new { message = "Food item created successfully!", foodItem });
         }
         catch (Exception e)
         {
@@ -141,16 +148,17 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
         }
     }
 
+    /// <summary>
+    /// Retrieves all food items posted by a specific donator.
+    /// </summary>
     [HttpGet("by-donator/{donatorId}")]
     public async Task<ActionResult<IEnumerable<FoodItem>>> GetFoodItemsByDonatorId([FromRoute] long donatorId)
     {
         try
         {
-            // Validate donatorId
             if (donatorId <= 0)
                 return BadRequest("Invalid donator ID.");
 
-            // Query food items for the donator
             var foodItems = await _db.FoodItems
                 .Where(fi => fi.DonatorId == donatorId)
                 .ToListAsync();
@@ -167,6 +175,9 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
         }
     }
 
+    /// <summary>
+    /// Allows a donator to update one of their existing food items.
+    /// </summary>
     [HttpPut("{foodItemId}")]
     [Authorize(Roles = "Donator")]
     public async Task<ActionResult<FoodItem>> UpdateFoodItem([FromRoute] long foodItemId,
@@ -174,16 +185,13 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
     {
         try
         {
-            // Validate foodItemId
             if (foodItemId <= 0)
                 return BadRequest("Invalid food item ID.");
 
-            // Get the donator ID from the claims
             var donatorIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (donatorIdStr == null || !long.TryParse(donatorIdStr, out var donatorId))
                 return Unauthorized();
 
-            // Check if the food item belongs to the donator
             var foodItem = await _db.FoodItems
                 .Include(fi => fi.DonatorProfile)
                     .ThenInclude(d => d!.User)
@@ -192,7 +200,7 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
             if (foodItem == null)
                 return NotFound("Food item not found.");
 
-            // Update food item properties
+            // Update properties
             foodItem.FoodName = dto.Name;
             foodItem.Description = dto.Description;
             foodItem.IsEatIn = dto.IsEatIn;
@@ -203,9 +211,10 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
             _db.FoodItems.Update(foodItem);
             await _db.SaveChangesAsync();
 
-            // Notify food seekers with pickup intent for this food item
+            // Notify seekers who showed intent for this food
             await _pickupIntentService.NotifyFoodItemIsUpdatedAsync(foodItem);
-            
+
+            // Return updated item in DTO format
             var foodItemDto = new FoodItemDto
             {
                 FoodId = foodItem.FoodId,
@@ -235,9 +244,8 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
                     FavoritesCount = foodItem.DonatorProfile.FavoritesCount
                 }
             };
-            
-            var message = "Food item is updated successfully!";
-            return Ok(new { message, foodItem= foodItemDto });
+
+            return Ok(new { message = "Food item is updated successfully!", foodItem = foodItemDto });
         }
         catch (Exception e)
         {
@@ -246,34 +254,33 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
         }
     }
 
+    /// <summary>
+    /// Toggles the activeness status (available/unavailable) of a food item.
+    /// </summary>
     [HttpPatch("{foodItemId}/toggle-activeness")]
     [Authorize(Roles = "Donator")]
     public async Task<ActionResult<FoodItem>> ToggleFoodItemActiveness([FromRoute] long foodItemId)
     {
         try
         {
-            // Validate foodItemId
             if (foodItemId <= 0)
                 return BadRequest("Invalid food item ID.");
 
-            // Get the donator ID from the claims
             var donatorIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (donatorIdStr == null || !long.TryParse(donatorIdStr, out var donatorId))
                 return Unauthorized();
 
-            // Check if the food item belongs to the donator
             var foodItem = await _db.FoodItems
                 .FirstOrDefaultAsync(fi => fi.FoodId == foodItemId && fi.DonatorId == donatorId);
 
             if (foodItem == null)
                 return NotFound("Food item not found.");
 
-            // Toggle activeness
             foodItem.IsActive = !foodItem.IsActive;
             _db.FoodItems.Update(foodItem);
             await _db.SaveChangesAsync();
 
-            // notify the food seekers with pickup intent for this food item
+            // Notify seekers that food is no longer available
             await _pickupIntentService.RemovePickupIntentsByFoodIdAndNotifyAsync(foodItemId);
 
             return Ok(foodItem);
@@ -285,32 +292,31 @@ public class FoodItemController(FoodSeekerContext db, PickupIntentService pickup
         }
     }
 
+    /// <summary>
+    /// Deletes a food item created by the donator.
+    /// </summary>
     [HttpDelete("{foodItemId}")]
     [Authorize(Roles = "Donator")]
     public async Task<IActionResult> DeleteFoodItem([FromRoute] long foodItemId)
     {
         try
         {
-            // Validate foodItemId
             if (foodItemId <= 0)
                 return BadRequest("Invalid food item ID.");
 
-            // Get the donator ID from the claims
             var donatorIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (donatorIdStr == null || !long.TryParse(donatorIdStr, out var donatorId))
                 return Unauthorized();
 
-            // Check if the food item belongs to the donator
             var foodItem = await _db.FoodItems
                 .FirstOrDefaultAsync(fi => fi.FoodId == foodItemId && fi.DonatorId == donatorId);
 
             if (foodItem == null)
                 return NotFound("Food item not found.");
 
-            // Remove pickup intents associated with this food item
+            // Clean up associated pickup intents
             await _pickupIntentService.RemovePickupIntentsByFoodIdAndNotifyAsync(foodItemId);
 
-            // Remove food item from the database
             _db.FoodItems.Remove(foodItem);
             await _db.SaveChangesAsync();
 

@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FoodSeekerAPI.Controllers;
 
+/// <summary>
+/// Manages operations related to food seekers' favorite donators.
+/// </summary>
 [Route("api/favorite-donator")]
 [ApiController]
 [Authorize(Roles = "FoodSeeker")]
@@ -15,44 +18,47 @@ public class FavoriteDonatorController(FoodSeekerContext db) : ControllerBase
 {
     private readonly FoodSeekerContext _db = db;
 
+    /// <summary>
+    /// Adds a donator to the current user's favorites.
+    /// </summary>
+    /// <param name="donatorId">The ID of the donator to favorite.</param>
     [HttpPost("{donatorId:long}")]
     public async Task<ActionResult<FavoriteDonatorDto>> AddFavoriteDonator(long donatorId)
     {
         try
         {
-            // Get user ID from JWT claims
+            // Extract seeker ID from JWT token
             var foodSeekerIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (foodSeekerIdStr == null || !long.TryParse(foodSeekerIdStr, out var foodSeekerId))
                 return Unauthorized();
 
-            // Check if the donator exists
+            // Validate donator exists
             var donator = await _db.DonatorProfiles
                 .Include(d => d.User)
                 .SingleOrDefaultAsync(d => donatorId == d.DonatorId);
             if (donator == null)
                 return NotFound("Donator not found");
 
-            // Check if the user already favorited this donator
+            // Prevent duplicate favorites
             var existingFavorite = await _db.FavoriteDonators
                 .FirstOrDefaultAsync(fd => fd.SeekerId == foodSeekerId && fd.DonatorId == donatorId);
             if (existingFavorite != null)
                 return Conflict("This donator is already in your favorites");
 
-            // Create new favorite entry
+            // Add to favorites
             var favorite = new FavoriteDonator
             {
                 SeekerId = foodSeekerId,
                 DonatorId = donatorId,
                 FavoritedAt = DateTime.UtcNow
             };
-            // Add the favorite to the database
             _db.FavoriteDonators.Add(favorite);
-            // Increment the favorites count for the donator
+
+            // Increment the donator's favorites count
             donator.FavoritesCount++;
-            // Save changes to the database
             await _db.SaveChangesAsync();
 
-            // Return the favorite donator DTO
+            // Return a DTO with donator info
             var favoriteDto = new FavoriteDonatorDto
             {
                 FavoriteId = favorite.FavouriteId,
@@ -69,8 +75,8 @@ public class FavoriteDonatorController(FoodSeekerContext db) : ControllerBase
                     AddressCountry = donator.AddressCountry,
                     Latitude = donator.Latitude,
                     Longitude = donator.Longitude,
-                    DonationStarts = donator.DonationStarts.ToString(@"HH:mm"),
-                    DonationEnds = donator.DonationStarts.ToString(@"HH:mm"),
+                    DonationStarts = donator.DonationStarts.ToString("HH:mm"),
+                    DonationEnds = donator.DonationEnds.ToString("HH:mm"),
                     AverageScore = donator.AverageScore,
                     FavoritesCount = donator.FavoritesCount
                 }
@@ -80,35 +86,37 @@ public class FavoriteDonatorController(FoodSeekerContext db) : ControllerBase
         }
         catch (Exception e)
         {
-            // Log the exception (you can use a logging framework here)
             Console.WriteLine($"Error adding favorite donator: {e.Message}");
             return StatusCode(500, "Internal server error");
         }
     }
 
-
+    /// <summary>
+    /// Removes a donator from the current user's favorites.
+    /// </summary>
+    /// <param name="donatorId">The ID of the donator to remove.</param>
     [HttpDelete("by-donator/{donatorId:long}")]
     public async Task<IActionResult> RemoveFavoriteDonator(long donatorId)
     {
         try
         {
-            // Get user ID from JWT claims
+            // Extract seeker ID from JWT token
             var foodSeekerIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (foodSeekerIdStr == null || !long.TryParse(foodSeekerIdStr, out var foodSeekerId))
                 return Unauthorized();
 
-            // Find the favorite donator entry
+            // Find the favorite record
             var favorite = await _db.FavoriteDonators
                 .FirstOrDefaultAsync(fd => fd.SeekerId == foodSeekerId && fd.DonatorId == donatorId);
             if (favorite == null)
                 return NotFound("Favorite donator not found");
 
-            // Find the donator profile to update favorites count
+            // Fetch the donator profile for count update
             var donator = await _db.DonatorProfiles.FindAsync(donatorId);
             if (donator == null)
                 return NotFound("Donator not found");
 
-            // Remove the favorite entry and update the donator's favorites count
+            // Remove from favorites and decrement count
             _db.FavoriteDonators.Remove(favorite);
             donator.FavoritesCount--;
             await _db.SaveChangesAsync();
@@ -117,7 +125,6 @@ public class FavoriteDonatorController(FoodSeekerContext db) : ControllerBase
         }
         catch (Exception e)
         {
-            // Log the exception (you can use a logging framework here)
             Console.WriteLine($"Error removing favorite donator: {e.Message}");
             return StatusCode(500, "Internal server error");
         }

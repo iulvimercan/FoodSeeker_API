@@ -1,6 +1,9 @@
-﻿namespace FoodSeekerAPI.DTO.User;
-
-public class UpdateUserEmailRequestDto
+﻿namespace FoodSeekerAPI.DTO.User
 {
-    public required string Email { get; set; }
+    // DTO for updating a user's email address.
+    public class UpdateUserEmailRequestDto
+    {
+        // New email address (required).
+        public required string Email { get; set; }
+    }
 }

@@ -9,23 +9,28 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
     private readonly FoodSeekerContext _db = db;
     private readonly NotificationService _notificationService = notificationService;
 
+    /// <summary>
+    /// Deletes pickup intents older than 6 hours to clean up stale entries.
+    /// </summary>
+    /// <returns>True if cleanup succeeded, false if an error occurred.</returns>
     public async Task<bool> CleanOldPickupIntentsAsync()
     {
         try
         {
-            // Define the threshold for old pickup intents (e.g., 30 days)
+            // Define cutoff time for old intents (6 hours ago)
             var threshold = DateTime.UtcNow.AddHours(-6);
 
-            // Find all pickup intents older than the threshold
+            // Retrieve pickup intents created before the threshold
             var oldIntents = _db.PickupIntents
                 .Where(intent => intent.CreatedAt < threshold)
                 .ToList();
 
             if (oldIntents.Count > 0)
             {
-                // Log the removal of old pickup intents
                 Console.WriteLine(
                     $"Removing {oldIntents.Count} old pickup intents older than 6 hours or inactive food items.");
+                
+                // Remove old pickup intents from database
                 _db.PickupIntents.RemoveRange(oldIntents);
                 await _db.SaveChangesAsync();
             }
@@ -34,19 +39,25 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
         }
         catch (Exception ex)
         {
-            // Log the exception (logging mechanism not shown here)
+            // Log error and return failure
             Console.WriteLine($"Error cleaning old pickup intents: {ex.Message}");
             return false;
         }
     }
 
+    /// <summary>
+    /// Removes all pickup intents related to a given food item and notifies the respective users.
+    /// </summary>
+    /// <param name="foodId">The ID of the food item whose pickup intents should be removed.</param>
+    /// <returns>True if operation succeeded, false if an error occurred.</returns>
     public async Task<bool> RemovePickupIntentsByFoodIdAndNotifyAsync(long foodId)
     {
         try
         {
-            // Clean old pickup intents before removing specific ones
+            // Clean old intents first to keep database tidy
             await CleanOldPickupIntentsAsync();
 
+            // Load all pickup intents for the specified foodId including related user and device tokens
             var pickupIntents = await _db.PickupIntents
                 .Where(pi => pi.FoodId == foodId)
                 .Include(pi => pi.User)
@@ -56,17 +67,16 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
 
             if (pickupIntents.Count > 0)
             {
-                // Log the removal of pickup intents for the specified food item
                 Console.WriteLine($"Removing {pickupIntents.Count} pickup intents for food ID {foodId}.");
 
-                // Notify users about the removal (notification mechanism not shown here)
+                // Notify each user that the food item has been removed and their intent cancelled
                 foreach (var intent in pickupIntents)
                 {
                     var title = "Food Item Removed";
                     var message =
                         $"The food item '{intent.FoodItem!.FoodName}' has been removed. Your pickup intent has been cancelled.";
 
-                    // Log the notification
+                    // Add a notification log entry for audit/history
                     var notificationLog = new NotificationLog
                     {
                         UserId = intent.SeekerId,
@@ -77,12 +87,15 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
                     _db.NotificationLogs.Add(notificationLog);
                     await _db.SaveChangesAsync();
 
+                    // Prepare data payload for push notification
                     var data = new Dictionary<string, string>
                     {
                         { "notificationId", notificationLog.NotificationId.ToString() },
                         { "sentAt", DateTime.UtcNow.ToString("o") },
                         { "screen", "pickup_intents" }
                     };
+
+                    // Send push notification to the user's last registered device token
                     var deviceToken = intent.User!.DeviceTokens.LastOrDefault();
                     if (deviceToken != null)
                     {
@@ -95,29 +108,35 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
                     }
                 }
 
+                // Remove all the pickup intents for the food item from database
                 _db.PickupIntents.RemoveRange(pickupIntents);
                 await _db.SaveChangesAsync();
 
                 return true;
             }
 
-            return true;
+            return true; // No intents found to remove is not an error
         }
         catch (Exception e)
         {
-            // Log the exception (logging mechanism not shown here)
             Console.WriteLine($"Error removing pickup intents for food ID {foodId}: {e.Message}");
             return false;
         }
     }
-    
+
+    /// <summary>
+    /// Notifies all users who expressed pickup intent that a food item has been updated.
+    /// </summary>
+    /// <param name="foodItem">The updated food item entity.</param>
+    /// <returns>True if notifications succeeded, false otherwise.</returns>
     public async Task<bool> NotifyFoodItemIsUpdatedAsync(FoodItem foodItem)
     {
         try
         {
-            // Clean old pickup intents before notifying
+            // Clean old pickup intents first
             await CleanOldPickupIntentsAsync();
 
+            // Retrieve pickup intents for this food item with user and device tokens loaded
             var pickupIntents = await _db.PickupIntents
                 .Where(pi => pi.FoodId == foodItem.FoodId)
                 .Include(pi => pi.User)
@@ -126,13 +145,13 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
 
             if (pickupIntents.Count > 0)
             {
-                // Notify users about the food item update
+                // Send notification to each user about the update
                 foreach (var intent in pickupIntents)
                 {
                     var title = "Food Item Updated";
                     var message = $"The food item '{foodItem.FoodName}' has been updated.";
 
-                    // Log the notification
+                    // Log notification in database
                     var notificationLog = new NotificationLog
                     {
                         UserId = intent.SeekerId,
@@ -143,12 +162,15 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
                     _db.NotificationLogs.Add(notificationLog);
                     await _db.SaveChangesAsync();
 
+                    // Prepare additional data payload for the notification
                     var data = new Dictionary<string, string>
                     {
                         { "notificationId", notificationLog.NotificationId.ToString() },
                         { "sentAt", DateTime.UtcNow.ToString("o") },
                         { "screen", "pickup_intents" }
                     };
+
+                    // Send push notification to user's last device token if exists
                     var deviceToken = intent.User!.DeviceTokens.LastOrDefault();
                     if (deviceToken != null)
                     {
@@ -166,7 +188,6 @@ public class PickupIntentService(FoodSeekerContext db, NotificationService notif
         }
         catch (Exception e)
         {
-            // Log the exception (logging mechanism not shown here)
             Console.WriteLine($"Error notifying food item update: {e.Message}");
             return false;
         }

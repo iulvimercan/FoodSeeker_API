@@ -1,6 +1,9 @@
-﻿namespace FoodSeekerAPI.DTO.DonatorProfile;
-
-public class UpdateRestaurantNameRequestDto
+﻿namespace FoodSeekerAPI.DTO.DonatorProfile
 {
-    public required string RestaurantName { get; set; }
+    // DTO for updating the name of the restaurant in a donator profile.
+    public class UpdateRestaurantNameRequestDto
+    {
+        // New name of the restaurant (required).
+        public required string RestaurantName { get; set; }
+    }
 }

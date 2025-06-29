@@ -18,6 +18,11 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
     private readonly NotificationService _notificationService = notificationService;
     private readonly PickupIntentService _pickupIntentService = pickupIntentService;
 
+    /// <summary>
+    /// Returns a list of pickup intents for the authenticated user.
+    /// Donators will see seekers who showed interest in their items.
+    /// Seekers will see the items they’ve shown interest in.
+    /// </summary>
     [HttpGet]
     [Authorize]
     public async Task<IActionResult> GetPickupIntents()
@@ -27,17 +32,17 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdStr == null || !long.TryParse(userIdStr, out var userId))
                 return Unauthorized();
+
             var isDonator = User.FindFirstValue(ClaimTypes.Role) == "Donator";
 
-            // Clean old pickup intents
+            // Remove expired intents before retrieving
             await _pickupIntentService.CleanOldPickupIntentsAsync();
-            
-            // fetch the pickup intents for the user
-            // can be both donator or seeker
+
+            // Fetch pickup intents where user is either the donator or seeker
             var pickupIntents = await _db.PickupIntents
                 .Include(pi => pi.FoodItem)
-                .ThenInclude(fi => fi!.DonatorProfile)
-                .ThenInclude(d => d!.User)
+                    .ThenInclude(fi => fi!.DonatorProfile)
+                        .ThenInclude(d => d!.User)
                 .Include(pi => pi.User)
                 .Where(pi => pi.FoodItem!.DonatorId == userId || pi.SeekerId == userId)
                 .ToListAsync();
@@ -46,7 +51,10 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
                 .Select(pi => pi.FoodItem!.FoodId)
                 .Distinct()
                 .ToList();
+
             List<PickupIntentDto> pickupIntentDtos;
+
+            // If user is donator, return pickup intents with seeker info
             if (isDonator)
             {
                 pickupIntentDtos = pickupIntents
@@ -55,46 +63,19 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
                     .Select(pi => new PickupIntentDto
                     {
                         IntentId = pi.IntentId,
-                        FoodItem = new FoodItemDto
-                        {
-                            FoodId = pi.FoodItem!.FoodId,
-                            FoodName = pi.FoodItem.FoodName,
-                            Description = pi.FoodItem.Description,
-                            IsEatIn = pi.FoodItem.IsEatIn,
-                            IsTakeAway = pi.FoodItem.IsTakeAway,
-                            IsBringPack = pi.FoodItem.IsBringPack,
-                            PhotoUrl = pi.FoodItem.PhotoUrl,
-                            CreatedAt = pi.FoodItem.CreatedAt,
-                            IsActive = pi.FoodItem.IsActive,
-                            DonatorProfile = new DonatorProfileDto
-                            {
-                                DonatorId = pi.FoodItem.DonatorProfile!.DonatorId,
-                                RestaurantName = pi.FoodItem.DonatorProfile.RestaurantName,
-                                ProfilePhotoUrl = pi.FoodItem.DonatorProfile.User!.ProfilePhotoUrl,
-                                Address = pi.FoodItem.DonatorProfile.Address,
-                                AddressStreet = pi.FoodItem.DonatorProfile.AddressStreet,
-                                AddressMunicipality = pi.FoodItem.DonatorProfile.AddressMunicipality,
-                                AddressCity = pi.FoodItem.DonatorProfile.AddressCity,
-                                AddressCountry = pi.FoodItem.DonatorProfile.AddressCountry,
-                                Latitude = pi.FoodItem.DonatorProfile.Latitude,
-                                Longitude = pi.FoodItem.DonatorProfile.Longitude,
-                                DonationStarts = pi.FoodItem.DonatorProfile.DonationStarts.ToString("HH:mm"),
-                                DonationEnds = pi.FoodItem.DonatorProfile.DonationEnds.ToString("HH:mm"),
-                                AverageScore = pi.FoodItem.DonatorProfile.AverageScore,
-                                FavoritesCount = pi.FoodItem.DonatorProfile.FavoritesCount,
-                            }
-                        },
+                        FoodItem = CreateFoodItemDto(pi.FoodItem!),
                         CreatedAt = pi.CreatedAt,
                         FoodSeeker = new UserProfileDto
                         {
                             UserId = pi.User!.UserId,
                             FullName = pi.User.FullName,
                             Email = pi.User.Email,
-                            IsDonator = false, // Seeker is not a donator
+                            IsDonator = false,
                             ProfilePhotoUrl = pi.User.ProfilePhotoUrl
                         }
                     }).ToList();
             }
+            // If seeker, return intents without user info
             else
             {
                 pickupIntentDtos = pickupIntents
@@ -102,36 +83,8 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
                     .Select(pi => new PickupIntentDto
                     {
                         IntentId = pi.IntentId,
-                        FoodItem = new FoodItemDto
-                        {
-                            FoodId = pi.FoodItem!.FoodId,
-                            FoodName = pi.FoodItem.FoodName,
-                            Description = pi.FoodItem.Description,
-                            IsEatIn = pi.FoodItem.IsEatIn,
-                            IsTakeAway = pi.FoodItem.IsTakeAway,
-                            IsBringPack = pi.FoodItem.IsBringPack,
-                            PhotoUrl = pi.FoodItem.PhotoUrl,
-                            CreatedAt = pi.FoodItem.CreatedAt,
-                            IsActive = pi.FoodItem.IsActive,
-                            DonatorProfile = new DonatorProfileDto
-                            {
-                                DonatorId = pi.FoodItem.DonatorProfile!.DonatorId,
-                                RestaurantName = pi.FoodItem.DonatorProfile.RestaurantName,
-                                ProfilePhotoUrl = pi.FoodItem.DonatorProfile.User!.ProfilePhotoUrl,
-                                Address = pi.FoodItem.DonatorProfile.Address,
-                                AddressStreet = pi.FoodItem.DonatorProfile.AddressStreet,
-                                AddressMunicipality = pi.FoodItem.DonatorProfile.AddressMunicipality,
-                                AddressCity = pi.FoodItem.DonatorProfile.AddressCity,
-                                AddressCountry = pi.FoodItem.DonatorProfile.AddressCountry,
-                                Latitude = pi.FoodItem.DonatorProfile.Latitude,
-                                Longitude = pi.FoodItem.DonatorProfile.Longitude,
-                                DonationStarts = pi.FoodItem.DonatorProfile.DonationStarts.ToString("HH:mm"),
-                                DonationEnds = pi.FoodItem.DonatorProfile.DonationEnds.ToString("HH:mm"),
-                                AverageScore = pi.FoodItem.DonatorProfile.AverageScore,
-                                FavoritesCount = pi.FoodItem.DonatorProfile.FavoritesCount,
-                            }
-                        },
-                        CreatedAt = pi.CreatedAt,
+                        FoodItem = CreateFoodItemDto(pi.FoodItem!),
+                        CreatedAt = pi.CreatedAt
                     }).ToList();
             }
 
@@ -144,6 +97,10 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
         }
     }
 
+    /// <summary>
+    /// Allows a food seeker to create a pickup intent for a specific food item.
+    /// Triggers notifications to both donator and seeker.
+    /// </summary>
     [HttpPost("{foodItemId}/send-notification")]
     [Authorize(Roles = "FoodSeeker")]
     public async Task<IActionResult> CreatePickupIntent([FromRoute] long foodItemId)
@@ -173,6 +130,7 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
             if (isAlreadyRequested == true)
                 return BadRequest("You have already requested pickup for this food item.");
 
+            // Get donator's device token
             var donatorDeviceToken = await _db.UserDeviceTokens
                 .Where(t => t.UserId == foodItem.DonatorId)
                 .OrderByDescending(t => t.CreatedAt)
@@ -182,7 +140,7 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
             if (donatorDeviceToken == null)
                 return NotFound("Device token not found for the specified donator.");
 
-            // Create the pickup intent
+            // Save pickup intent in database
             var pickupIntent = new PickupIntent
             {
                 FoodId = foodItemId,
@@ -193,9 +151,10 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
             _db.PickupIntents.Add(pickupIntent);
             await _db.SaveChangesAsync();
 
-            // Send notification to the donator
+            // Send notification to donator
             var titleDonator = "Pickup Intent Created";
             var bodyDonator = $"A pickup intent has been created for the food item '{foodItem.FoodName}'.";
+
             var donatorNotificationLog = new NotificationLog
             {
                 UserId = foodItem.DonatorId,
@@ -213,13 +172,13 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
                 { "sentAt", DateTime.UtcNow.ToString("o") },
                 { "screen", "pickup_intents" }
             };
-            await _notificationService.SendNotificationAsync(donatorDeviceToken, titleDonator, bodyDonator,
-                dataDonator);
 
+            await _notificationService.SendNotificationAsync(donatorDeviceToken, titleDonator, bodyDonator, dataDonator);
 
+            // Send notification to food seeker
             var titleSeeker = "Pickup Intent Created";
             var bodySeeker = $"You have successfully created a pickup intent for '{foodItem.FoodName}'.";
-            // Log notification for the food seeker
+
             var userNotificationLog = new NotificationLog
             {
                 UserId = foodSeekerId,
@@ -230,13 +189,14 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
             };
             _db.NotificationLogs.Add(userNotificationLog);
             await _db.SaveChangesAsync();
+
             var dataSeeker = new Dictionary<string, string>
             {
                 { "notificationId", userNotificationLog.NotificationId.ToString() },
                 { "sentAt", DateTime.UtcNow.ToString("o") },
                 { "screen", "pickup_intents" }
             };
-            // Send notification to the food seeker
+
             var userDeviceToken = await _db.UserDeviceTokens
                 .Where(t => t.UserId == foodSeekerId)
                 .Select(t => t.DeviceToken)
@@ -254,6 +214,9 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
         }
     }
 
+    /// <summary>
+    /// Allows either the food seeker or the donator to delete a pickup intent.
+    /// </summary>
     [HttpDelete("{intentId:long}")]
     [Authorize]
     public async Task<IActionResult> DeletePickupIntent([FromRoute] long intentId)
@@ -283,4 +246,37 @@ public class PickupIntentController(FoodSeekerContext db, NotificationService no
             return StatusCode(500, $"Internal server error: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Helper method to construct a FoodItemDto from a FoodItem entity.
+    /// </summary>
+    private FoodItemDto CreateFoodItemDto(FoodItem foodItem) => new()
+    {
+        FoodId = foodItem.FoodId,
+        FoodName = foodItem.FoodName,
+        Description = foodItem.Description,
+        IsEatIn = foodItem.IsEatIn,
+        IsTakeAway = foodItem.IsTakeAway,
+        IsBringPack = foodItem.IsBringPack,
+        PhotoUrl = foodItem.PhotoUrl,
+        CreatedAt = foodItem.CreatedAt,
+        IsActive = foodItem.IsActive,
+        DonatorProfile = new DonatorProfileDto
+        {
+            DonatorId = foodItem.DonatorProfile!.DonatorId,
+            RestaurantName = foodItem.DonatorProfile.RestaurantName,
+            ProfilePhotoUrl = foodItem.DonatorProfile.User!.ProfilePhotoUrl,
+            Address = foodItem.DonatorProfile.Address,
+            AddressStreet = foodItem.DonatorProfile.AddressStreet,
+            AddressMunicipality = foodItem.DonatorProfile.AddressMunicipality,
+            AddressCity = foodItem.DonatorProfile.AddressCity,
+            AddressCountry = foodItem.DonatorProfile.AddressCountry,
+            Latitude = foodItem.DonatorProfile.Latitude,
+            Longitude = foodItem.DonatorProfile.Longitude,
+            DonationStarts = foodItem.DonatorProfile.DonationStarts.ToString("HH:mm"),
+            DonationEnds = foodItem.DonatorProfile.DonationEnds.ToString("HH:mm"),
+            AverageScore = foodItem.DonatorProfile.AverageScore,
+            FavoritesCount = foodItem.DonatorProfile.FavoritesCount
+        }
+    };
 }

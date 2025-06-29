@@ -1,6 +1,9 @@
-﻿namespace FoodSeekerAPI.DTO.User;
-
-public class UpdateProfilePhotoRequestDto
+﻿namespace FoodSeekerAPI.DTO.User
 {
-    public required string ProfilePhotoUrl { get; set; }
+    // DTO for updating the user's profile photo URL.
+    public class UpdateProfilePhotoRequestDto
+    {
+        // New profile photo URL (required).
+        public required string ProfilePhotoUrl { get; set; }
+    }
 }

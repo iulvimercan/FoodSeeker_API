@@ -1,74 +1,77 @@
-﻿namespace FoodSeekerAPI.Utils;
-
-// document this file
-// This utility class provides methods for geographical calculations, such as calculating the distance between two points on the Earth's surface.
-// It uses the Haversine formula to compute the distance based on latitude and longitude coordinates.
-
-/// <summary>
-/// Utility class for geographical calculations.
-/// </summary>
-public static class GeoUtils
+﻿namespace FoodSeekerAPI.Utils
 {
-    // Radius of the Earth in kilometers
-    private const double EarthRadiusKm = 6371.0;
-
     /// <summary>
-    /// Checks whether the destination point is within the given distance from the origin point using the Haversine formula.
+    /// Provides utility methods for geographical calculations,
+    /// primarily for calculating distances and proximity between
+    /// two latitude/longitude points on the Earth's surface.
     /// </summary>
-    /// <param name="userLat">Latitude of the user in degrees</param>
-    /// <param name="userLng">Longitude of the user in degrees</param>
-    /// <param name="destLat">Latitude of the destination in degrees</param>
-    /// <param name="destLng">Longitude of the destination in degrees</param>
-    /// <param name="distanceKm">Distance radius in kilometers</param>
-    /// <returns>True if destination is within distanceKm, false otherwise</returns>
-    public static bool IsWithinDistance(double userLat, double userLng, double destLat, double destLng, double distanceKm = 50)
+    public static class GeoUtils
     {
-        double dLat = DegreesToRadians(destLat - userLat);
-        double dLon = DegreesToRadians(destLng - userLng);
+        // Mean radius of the Earth in kilometers
+        private const double EarthRadiusKm = 6371.0;
 
-        double lat1Rad = DegreesToRadians(userLat);
-        double lat2Rad = DegreesToRadians(destLat);
+        /// <summary>
+        /// Determines whether a destination point is within a specified distance radius 
+        /// from an origin point using the Haversine formula.
+        /// </summary>
+        /// <param name="userLat">Latitude of the origin point in decimal degrees.</param>
+        /// <param name="userLng">Longitude of the origin point in decimal degrees.</param>
+        /// <param name="destLat">Latitude of the destination point in decimal degrees.</param>
+        /// <param name="destLng">Longitude of the destination point in decimal degrees.</param>
+        /// <param name="distanceKm">Maximum allowed distance in kilometers (default is 50 km).</param>
+        /// <returns>
+        /// True if the destination is within the specified distance radius from the origin;
+        /// otherwise, false.
+        /// </returns>
+        public static bool IsWithinDistance(double userLat, double userLng, double destLat, double destLng, double distanceKm = 50)
+        {
+            double dLat = DegreesToRadians(destLat - userLat);
+            double dLon = DegreesToRadians(destLng - userLng);
 
-        double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                   Math.Cos(lat1Rad) * Math.Cos(lat2Rad) *
-                   Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            double lat1Rad = DegreesToRadians(userLat);
+            double lat2Rad = DegreesToRadians(destLat);
 
-        double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                       Math.Cos(lat1Rad) * Math.Cos(lat2Rad) *
+                       Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
 
-        double distance = EarthRadiusKm * c;
+            double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 
-        return distance <= distanceKm;
-    }
-    
-    /// <summary>
-    /// Calculates the distance between two geographical points using the Haversine formula.
-    /// </summary>
-    /// <param name="lat1">Latitude of the first point.</param>
-    /// <param name="lon1">Longitude of the first point.</param>
-    /// <param name="lat2">Latitude of the second point.</param>
-    /// <param name="lon2">Longitude of the second point.</param>
-    /// <returns>Distance in kilometers between the two points.</returns>
-    public static double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
-    {
-        const double R = 6371; // Radius of the Earth in kilometers
-        var dLat = DegreesToRadians(lat2 - lat1);
-        var dLon = DegreesToRadians(lon2 - lon1);
+            double distance = EarthRadiusKm * c;
 
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(DegreesToRadians(lat1)) * Math.Cos(DegreesToRadians(lat2)) *
-                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            return distance <= distanceKm;
+        }
 
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-        return R * c; // Distance in kilometers
-    }
+        /// <summary>
+        /// Calculates the great-circle distance between two geographical points using 
+        /// the Haversine formula.
+        /// </summary>
+        /// <param name="lat1">Latitude of the first point in decimal degrees.</param>
+        /// <param name="lon1">Longitude of the first point in decimal degrees.</param>
+        /// <param name="lat2">Latitude of the second point in decimal degrees.</param>
+        /// <param name="lon2">Longitude of the second point in decimal degrees.</param>
+        /// <returns>Distance in kilometers between the two points.</returns>
+        public static double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+        {
+            var dLat = DegreesToRadians(lat2 - lat1);
+            var dLon = DegreesToRadians(lon2 - lon1);
 
-    /// <summary>
-    /// Converts degrees to radians.
-    /// </summary>
-    /// <param name="degrees">Value in degrees.</param>
-    /// <returns>Value in radians.</returns>
-    private static double DegreesToRadians(double degrees)
-    {
-        return degrees * (Math.PI / 180);
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(DegreesToRadians(lat1)) * Math.Cos(DegreesToRadians(lat2)) *
+                    Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return EarthRadiusKm * c;
+        }
+
+        /// <summary>
+        /// Converts an angle from degrees to radians.
+        /// </summary>
+        /// <param name="degrees">Angle in degrees.</param>
+        /// <returns>Angle converted to radians.</returns>
+        private static double DegreesToRadians(double degrees)
+        {
+            return degrees * (Math.PI / 180);
+        }
     }
 }
