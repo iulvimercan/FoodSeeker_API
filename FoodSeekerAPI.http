@@ -1,6 +1,51 @@
 @FoodSeekerAPI_HostAddress = http://localhost:5138
+# Paste the token returned by /api/auth/login here
+@token = <jwt-from-login>
 
-GET {{FoodSeekerAPI_HostAddress}}/weatherforecast/
+### Sign up as a food seeker (a verification email is sent)
+POST {{FoodSeekerAPI_HostAddress}}/api/auth/sign-up/food-seeker
+Content-Type: application/json
+
+{
+  "fullName": "Jane Doe",
+  "email": "jane.doe@example.com",
+  "password": "ChangeMe123!"
+}
+
+### Log in (the account must be verified first)
+POST {{FoodSeekerAPI_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "jane.doe@example.com",
+  "password": "ChangeMe123!"
+}
+
+### Active food items within 5 km, filtered by keyword
+GET {{FoodSeekerAPI_HostAddress}}/api/food/nearby?latitude=41.0082&longitude=28.9784&distanceKm=5&keyword=soup
 Accept: application/json
 
-###
+### Donators near a location
+GET {{FoodSeekerAPI_HostAddress}}/api/donator/nearby?latitude=41.0082&longitude=28.9784
+Accept: application/json
+
+### Create a food item (Donator role)
+POST {{FoodSeekerAPI_HostAddress}}/api/food
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Lentil soup",
+  "description": "Four portions left from lunch",
+  "isEatIn": true,
+  "isTakeAway": true,
+  "isBringPack": false
+}
+
+### Request pickup of a food item (FoodSeeker role) - notifies the donator
+POST {{FoodSeekerAPI_HostAddress}}/api/pickup-intent/1/send-notification
+Authorization: Bearer {{token}}
+
+### My pickup intents
+GET {{FoodSeekerAPI_HostAddress}}/api/pickup-intent
+Authorization: Bearer {{token}}
