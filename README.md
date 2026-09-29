@@ -18,6 +18,11 @@ ASP.NET Core Web API that connects restaurants with surplus food to people nearb
 - **Social features:** star-rating feedback with comments, favorite restaurants, per-user notification inbox with read/unread state
 
 ## 🏗️ Architecture
+![System overview: Flutter app, .NET backend, SQL Server and Firebase services](docs/system-architecture.png)
+
+The Flutter app calls this API over HTTP with JSON. It uploads photos straight to Firebase Storage and sends the API only the download URL. The API stores the data in SQL Server and sends push notifications through Firebase Cloud Messaging.
+
+Inside the API:
 ```mermaid
 flowchart LR
     App[FoodSeeker<br/>Flutter app] -->|HTTPS + JWT| Controllers
@@ -31,6 +36,41 @@ flowchart LR
     Services -->|SMTP| Mail[Email]
 ```
 A single ASP.NET Core project. Controllers handle requests and return DTOs. Cross-cutting work sits in services registered through DI: JWT creation and validation, BCrypt hashing, email, push notifications, and pickup-request handling. EF Core with code-first migrations maps the models to SQL Server.
+
+### Pickup request flow
+What happens when a seeker requests an item, and when the donator later changes it:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#fbfbfb', 'actorBkg': '#ffc7c2', 'actorBorder': '#ff735e', 'actorTextColor': '#1e1e1e', 'actorLineColor': '#757575', 'signalColor': '#1e1e1e', 'signalTextColor': '#1e1e1e', 'activationBkgColor': '#fcd19c', 'activationBorderColor': '#d2992f', 'noteBkgColor': '#fcd19c', 'noteBorderColor': '#d2992f', 'noteTextColor': '#1e1e1e', 'labelBoxBkgColor': '#ffc7c2', 'labelBoxBorderColor': '#ff735e', 'labelTextColor': '#1e1e1e', 'loopTextColor': '#1e1e1e'}}}%%
+sequenceDiagram
+    participant S as Food Seeker app
+    participant A as FoodSeeker API
+    participant D as SQL Server
+    participant F as Firebase (FCM)
+    participant R as Donator app
+
+    rect rgb(251, 251, 251)
+    S->>+A: Request pickup<br/>POST pickup-intent/{id}/send-notification
+    A->>+D: Load the food item and its pickup intents
+    D-->>-A: Food item + intents
+    Note over A: Reject if the item is inactive<br/>or this seeker already requested it
+    A->>+D: Save the PickupIntent and a NotificationLog entry for each side
+    D-->>-A: Saved
+    A->>F: Push "Pickup Intent Created"
+    F-->>R: Notification to the donator
+    A->>F: Push confirmation
+    F-->>S: Notification to the seeker
+    A-->>-S: 200 OK
+
+    R->>+A: Edit (PUT) / deactivate / delete the food item
+    A->>+D: Update the item, load its pickup intents
+    D-->>-A: Intents with device tokens
+    A->>F: Push "Food Item Updated" or "Food Item Removed"
+    F-->>S: Notification to each seeker who requested it
+    Note over A,D: Deactivate and delete also cancel the intents.<br/>Intents older than 6 hours are cleaned up along the way.
+    A-->>-R: 200 OK
+    end
+```
 
 <details>
 <summary>Data model</summary>
@@ -49,6 +89,14 @@ erDiagram
     User ||--o{ NotificationLog : receives
 ```
 `DonatorProfile` shares its key with `User` (one-to-one) and stores the restaurant's address, coordinates, donation hours, average rating and favorites count.
+</details>
+
+<details>
+<summary>Use cases</summary>
+
+Use case diagram from the project's design phase: what donators, food seekers and guests (not logged in) can do.
+
+![Use case diagram for donators, food seekers and guests](docs/use-cases.png)
 </details>
 
 ## 🧰 Tech stack
