@@ -5,6 +5,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
       <UserSecretsId>51e3d292-bcab-4606-9fcd-c367d9bc94c8</UserSecretsId>
+        <!-- The test project lives under this folder; keep it out of the API's compile items -->
+        <DefaultItemExcludes>$(DefaultItemExcludes);tests/**</DefaultItemExcludes>
   </PropertyGroup>
 
     <ItemGroup>
