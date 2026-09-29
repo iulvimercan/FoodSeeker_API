@@ -7,7 +7,7 @@ ASP.NET Core Web API that connects restaurants with surplus food to people nearb
 [![CI](https://github.com/iulvimercan/FoodSeeker_API/actions/workflows/ci.yml/badge.svg)](https://github.com/iulvimercan/FoodSeeker_API/actions/workflows/ci.yml)
 ![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)
 
-![Swagger UI of the FoodSeeker API](docs/swagger-top.png)
+![FoodSeeker API endpoints in Swagger UI](docs/swagger-endpoints.png)
 
 ## ✨ Features
 - **Two roles:** donators (restaurants) and food seekers, enforced with role-based JWT authorization (only donators manage food items, only seekers request pickups or leave feedback)
@@ -74,13 +74,6 @@ erDiagram
    dotnet run --launch-profile http
    ```
 4. Open http://localhost:5138/swagger. [`FoodSeekerAPI.http`](FoodSeekerAPI.http) has sample requests for sign-up, login, nearby search and pickup requests.
-
-<details>
-<summary>All endpoints</summary>
-
-![All FoodSeeker API endpoints in Swagger UI](docs/swagger-endpoints.png)
-</details>
-
 ## 🧪 Tests
 ```bash
 dotnet test
